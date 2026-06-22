@@ -1,0 +1,30 @@
+# Visual Studio の一時・キャッシュフォルダ
+.vs/
+[Dd]ebug/
+[Rr]elease/
+x64/
+x88/
+
+# IntelliSense やビルド用のデータベース・キャッシュファイル
+*.db
+*.suo
+*.user
+*.aps
+*.ncb
+*.boof
+*.log
+*.tlog
+*.ilm
+*.ilk
+*.pdr
+*.pdb
+*.idb
+*.ipch
+*.sdf
+*.vsdx
+*.vsidx
+
+# Visual Studio 2022以降のウィンドウレイアウトバックアップなど
+*DocumentLayout.backup.json
+*DocumentLayout.json
+*HierarchyCache.v1.txt
