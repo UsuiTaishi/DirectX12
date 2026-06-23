@@ -1,4 +1,4 @@
-#include<Windows.h>
+﻿#include<Windows.h>
 #include<tchar.h>
 #include<d3d12.h>
 #include<dxgi1_6.h>
@@ -23,86 +23,87 @@ void DebugOutputFormatString(const char* format, ...)
 }
 
 LRESULT WindowProcedure(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
-	if (msg == WM_DESTROY) {//�E�B���h�E���j�����ꂽ��Ă΂�܂�
-		PostQuitMessage(0);//OS�ɑ΂��āu�������̃A�v���͏I�����v�Ɠ`����
+	if (msg == WM_DESTROY) {//ウィンドウが破棄されたら呼ばれます
+		PostQuitMessage(0);//OSに対して「もうこのアプリは終わるんや」と伝える
 		return 0;
 	}
-	return DefWindowProc(hwnd, msg, wparam, lparam);//�K��̏������s��
+	return DefWindowProc(hwnd, msg, wparam, lparam);//規定の処理を行う
 }
 
 const UINT window_width = 1280;
 const UINT window_height = 720;
 
-//�A�h���X�ݒ�
-IDXGIFactory6* _dxgiFactory = nullptr; //�O���{��T������A��ʂ̊Ǘ��������肷��匳�̑���
-ID3D12Device* _dev = nullptr;//�A�_�v�^�[��I�������̂��ɃO���{�̒��ɍ����B�R�}���h�A���P�[�^�[�Ƃ��e�N�X�`���o�b�t�@�Ȃǂ��K�v�Ƃ��Ă镪��؂�o������
+//アドレス設定
+IDXGIFactory6* _dxgiFactory = nullptr; //グラボを探したり、画面の管理をしたりする大元の窓口
+ID3D12Device* _dev = nullptr;//アダプターを選択したのちにグラボの中に作られる。コマンドアロケーターとかテクスチャバッファなどが必要としてる分を切り出す働き
 IDXGISwapChain4* _swapchain = nullptr;
-ID3D12CommandAllocator* _cmdAllocator = nullptr;//�R�}���h�A���P�[�^�[�̐錾�Ə������A�R�}���h���X�g����ɐ錾���適�R�}���h�A���P�[�^�[�ɏ������X�g�͕ۑ�����邩��
-ID3D12GraphicsCommandList* _cmdList = nullptr;//�R�}���h���X�g�̐錾�Ə�����
+ID3D12CommandAllocator* _cmdAllocator = nullptr;//コマンドアロケーターの宣言と初期化、コマンドリストより先に宣言する←コマンドアロケーターに小窓リストは保存されるから
+ID3D12GraphicsCommandList* _cmdList = nullptr;//コマンドリストの宣言と初期化
+ID3D12CommandQueue* _cmdQuene = nullptr;
 
 
-//�v���g�^�C�v�錾
+//プロトタイプ宣言
 #ifdef _DEBUG
 int main(){
 #else
-int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)//Windows�A�v���N���̂��߂�Main�֐�
+int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)//Windowsアプリ起動のためのMain関数
 {
 #endif
 	DebugOutputFormatString("Show window test.");
 
 	WNDCLASSEX w = {};
 	w.cbSize = sizeof(WNDCLASSEX);
-	w.lpfnWndProc = (WNDPROC)WindowProcedure;//�R�[���o�b�N�֐��̎w��
-	w.lpszClassName = _T("DirectXTest");//�A�v���P�[�V�����N���X��(�K���ł����ł�)
-	w.hInstance = GetModuleHandle(0);//�n���h���̎擾
-	RegisterClassEx(&w);//�A�v���P�[�V�����N���X(���������̍�邩���낵������OS�ɗ\������)
+	w.lpfnWndProc = (WNDPROC)WindowProcedure;//コールバック関数の指定
+	w.lpszClassName = _T("DirectXTest");//アプリケーションクラス名(適当でいいです)
+	w.hInstance = GetModuleHandle(0);//ハンドルの取得
+	RegisterClassEx(&w);//アプリケーションクラス(こういうの作るからよろしくってOSに予告する)
 
-	RECT wrc = { 0,0, window_width, window_height };//�E�B���h�E�T�C�Y�����߂�
-	AdjustWindowRect(&wrc, WS_OVERLAPPEDWINDOW, false);//�E�B���h�E�̃T�C�Y�͂�����Ɩʓ|�Ȃ̂Ŋ֐����g���ĕ␳����
-	//�E�B���h�E�I�u�W�F�N�g�̐���
-	HWND hwnd = CreateWindow(w.lpszClassName,//�N���X���w��
-		_T("DX12�e�X�g"),//�^�C�g���o�[�̕���
-		WS_OVERLAPPEDWINDOW,//�^�C�g���o�[�Ƌ��E��������E�B���h�E�ł�
-		CW_USEDEFAULT,//�\��X���W��OS�ɂ��C�����܂�
-		CW_USEDEFAULT,//�\��Y���W��OS�ɂ��C�����܂�
-		wrc.right - wrc.left,//�E�B���h�E��
-		wrc.bottom - wrc.top,//�E�B���h�E��
-		nullptr,//�e�E�B���h�E�n���h��
-		nullptr,//���j���[�n���h��
-		w.hInstance,//�Ăяo���A�v���P�[�V�����n���h��
-		nullptr);//�ǉ��p�����[�^
-	ShowWindow(hwnd, SW_SHOW);//�E�B���h�E�\��
+	RECT wrc = { 0,0, window_width, window_height };//ウィンドウサイズを決める
+	AdjustWindowRect(&wrc, WS_OVERLAPPEDWINDOW, false);//ウィンドウのサイズはちょっと面倒なので関数を使って補正する
+	//ウィンドウオブジェクトの生成
+	HWND hwnd = CreateWindow(w.lpszClassName,//クラス名指定
+		_T("DX12テスト"),//タイトルバーの文字
+		WS_OVERLAPPEDWINDOW,//タイトルバーと境界線があるウィンドウです
+		CW_USEDEFAULT,//表示X座標はOSにお任せします
+		CW_USEDEFAULT,//表示Y座標はOSにお任せします
+		wrc.right - wrc.left,//ウィンドウ幅
+		wrc.bottom - wrc.top,//ウィンドウ高
+		nullptr,//親ウィンドウハンドル
+		nullptr,//メニューハンドル
+		w.hInstance,//呼び出しアプリケーションハンドル
+		nullptr);//追加パラメータ
+	ShowWindow(hwnd, SW_SHOW);//ウィンドウ表示
 
 	MSG msg = {};
 
-	auto result = CreateDXGIFactory1(IID_PPV_ARGS(&_dxgiFactory));//�ŏ��̂ق��Ő錾���� _dxgiFactory�ɂԂ�����	��ڂ̕ϐ��͍�����H����Ԃ����ޏꏊ
-	//IID_PPY_ARGS�̓|�C���^�[��n���ƃC���^�[�t�F�[�XID�ƕۑ��ꏊ��Ԃ�
+	auto result = CreateDXGIFactory1(IID_PPV_ARGS(&_dxgiFactory));//最初のほうで宣言した _dxgiFactoryにぶち込む	二つ目の変数は作った工場をぶち込む場所
+	//IID_PPY_ARGSはポインターを渡すとインターフェースIDと保存場所を返す
 
-	vector<IDXGIAdapter*> adapters;//�ϒ��z��@�h���C�o�[�����ꂩ�炱���ɒǉ����Ă���
-	IDXGIAdapter* tmpAdapter = nullptr;//���ꂩ��z��ɓ����ɉ��Ŗ��O��^����Bfor�ŉ񂷂��߁H
-	for (int i = 0; _dxgiFactory->EnumAdapters(i, &tmpAdapter) != DXGI_ERROR_NOT_FOUND; ++i)//�C���f�b�N�X�ԍ��ƃO���{�̃f�[�^�̃A�h���X
+	vector<IDXGIAdapter*> adapters;//可変長配列　ドライバーをこれからここに追加していく
+	IDXGIAdapter* tmpAdapter = nullptr;//これから配列に入るやつに仮で名前を与える。forで回すため？
+	for (int i = 0; _dxgiFactory->EnumAdapters(i, &tmpAdapter) != DXGI_ERROR_NOT_FOUND; ++i)//インデックス番号とグラボのデータのアドレス
 	{
-		adapters.push_back(tmpAdapter);//������������ϒ��z��̌���tmpAdapter���Ԃ�����
+		adapters.push_back(tmpAdapter);//さっき作った可変長配列の後ろにtmpAdapterをぶち込む
 	}
-	//�h���C�o�[���̃A�h���X���������ϒ��z�񂪂ł���
+	//ドライバー情報のアドレスが入った可変長配列ができた
 
-	for (auto adpt : adapters)//adapters����1���q���o�������adpt�Ƃ���
+	for (auto adpt : adapters)//adaptersから1っ子取り出しそれをadptとする
 	{
-		DXGI_ADAPTER_DESC adesc = {};//������ DXGI_ADAPTER_DESC�i�\���́j�ɂ̓O���{�̃f�[�^�i�X�y�b�N�A���O�Ƃ��j������Ă�B
+		DXGI_ADAPTER_DESC adesc = {};//初期化 DXGI_ADAPTER_DESC（構造体）にはグラボのデータ（スペック、名前とか）が乗ってる。
 		adpt->GetDesc(&adesc);
 		wstring strDesc = adesc.Description;
-		//		�\����DXGI_ADAPTER_DESC�ɂ���
+		//		構造体DXGI_ADAPTER_DESCについて
 		/*
-		Description (�^: WCHAR[128])�O���t�B�b�N�{�[�h�̖��O�i�^�ԁj�ł��B�uNVIDIA GeForce RTX 4070�v��uIntel(R) Iris(R) Xe Graphics�v�Ƃ������A�l�Ԃ����Ĉ�ڂł킩�镶���񂪊i�[����܂��B
-		VendorId (�^: UINT)�O���{����������[�J�[�i�x���_�[�j�̎��ʔԍ��ł��B�Ⴆ�΁ANVIDIA�Ȃ� 0x10DE�AAMD�Ȃ� 0x1002�AIntel�Ȃ� 0x8086 �Ƃ������A�ƊE���ʂ̌��܂������l������܂��B
-		2. �O���{�̌^�ԁi�V�X�e���p�j
-		DeviceId (�^: UINT)�O���{�̋�̓I�ȃ��f���i���i�j��\�����ʔԍ��ł��B���[�J�[�����i���ƂɊ��蓖�ĂĂ��܂��B
-		SubSysId (�^: UINT)�T�u�V�X�e���i�{�[�h�S�̂̐݌v���j�̎��ʔԍ��ł��B�Ⴆ�΁A����NVIDIA�̃`�b�v���g���Ă��Ă��AASUS����MSI�����Ƃ������Ⴂ����ʂ��邽�߂Ɏg���܂��B
-		Revision (�^: UINT)�O���{�̉����ԍ��i�o�[�W�����j�ł��B�n�[�h�E�F�A�ׂ̍����d�l�ύX�̓x������\���܂��B
-		3. �������iVRAM�j�̗e�ʃv���O��������Ԃ悭�`�F�b�N����d�v�ȍ��ڂł��i���ׂăo�C�g�P�ʂȂ̂ŁAGB�ɒ����ɂ� $1024 \times 1024 \times 1024$ �Ŋ���܂��j�B
-		DedicatedVideoMemory (�^: SIZE_T)�O���{��p�̒������������iVRAM�j�̗e�ʂł��B�Q�[����3D�����̉��K���ɒ�������p�[�c�ł��B
-		DedicatedSystemMemory (�^: SIZE_T)�O���{��p�Ƃ��āA�p�\�R���̃��C���������iRAM�j����N�����Ɋm�ۂ��ꂽ�e�ʂł��B��Ɂu�r�f�I�������𓋍ڂ��Ă��Ȃ������O���t�B�b�N�X�iIntel Core��Ryzen��CPU�����O���{�j�v�ȂǂŎg���܂��B���ʂ̃O���{�Ȃ�ʏ� 0 �ł��B
-		SharedSystemMemory (�^: SIZE_T)�O���{��p�̃�����������Ȃ��Ȃ����Ƃ��ɁA�p�\�R���̃��C���������iRAM�j����ő�łǂꂾ���؂�Ă���邩�Ƃ����e�ʂł��B4. �ʂ̎��ʎqAdapterLuid (�^: LUID)�V�X�e�����ł��̃O���{���΂ɌĂъԈႦ�Ȃ����߂́A��ӂ̎��ʔԍ��iLUID�j�ł��B�p�\�R����2���ȏ�̃O���{���h�����Ă���ꍇ�A�ǂ���̃O���{����OS�������I�Ɍ������邽�߂Ɏg���܂��B
+		Description (型: WCHAR[128])グラフィックボードの名前（型番）です。「NVIDIA GeForce RTX 4070」や「Intel(R) Iris(R) Xe Graphics」といった、人間が見て一目でわかる文字列が格納されます。
+		VendorId (型: UINT)グラボを作ったメーカー（ベンダー）の識別番号です。例えば、NVIDIAなら 0x10DE、AMDなら 0x1002、Intelなら 0x8086 といった、業界共通の決まった数値が入ります。
+		2. グラボの型番（システム用）
+		DeviceId (型: UINT)グラボの具体的なモデル（製品）を表す識別番号です。メーカーが製品ごとに割り当てています。
+		SubSysId (型: UINT)サブシステム（ボード全体の設計元）の識別番号です。例えば、同じNVIDIAのチップを使っていても、ASUS製かMSI製かといった違いを区別するために使われます。
+		Revision (型: UINT)グラボの改訂番号（バージョン）です。ハードウェアの細かい仕様変更の度合いを表します。
+		3. メモリ（VRAM）の容量プログラムが一番よくチェックする重要な項目です（すべてバイト単位なので、GBに直すには $1024 \times 1024 \times 1024$ で割ります）。
+		DedicatedVideoMemory (型: SIZE_T)グラボ専用の超高速メモリ（VRAM）の容量です。ゲームや3D処理の快適さに直結するパーツです。
+		DedicatedSystemMemory (型: SIZE_T)グラボ専用として、パソコンのメインメモリ（RAM）から起動時に確保された容量です。主に「ビデオメモリを搭載していない内蔵グラフィックス（Intel CoreやRyzenのCPU内蔵グラボ）」などで使われます。普通のグラボなら通常 0 です。
+		SharedSystemMemory (型: SIZE_T)グラボ専用のメモリが足りなくなったときに、パソコンのメインメモリ（RAM）から最大でどれだけ借りてこれるかという容量です。4. 個別の識別子AdapterLuid (型: LUID)システム内でこのグラボを絶対に呼び間違えないための、一意の識別番号（LUID）です。パソコンに2枚以上のグラボが刺さっている場合、どちらのグラボかをOSが内部的に見分けるために使われます。
 		*/
 
 		if (strDesc.find(L"NVIDIA") != string::npos)
@@ -110,28 +111,135 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)//Windows�A�v���N���̂��߂�M
 			tmpAdapter = adpt;
 			break;
 		}
-	}//strDesc�ɃO���{�̖��O���o�^�����B�����\�O���{�������ɂ͂��������R�[�h���K�v
+	}//strDescにグラボの名前が登録される。高性能グラボが入れるにはもう少しコードが必要
 	D3D_FEATURE_LEVEL levels[] =
 	{
-		D3D_FEATURE_LEVEL_12_1,//���C�g���[�V���O�ɂ��Ή����Ă�
+		D3D_FEATURE_LEVEL_12_1,//レイトレーシングにも対応してる
 		D3D_FEATURE_LEVEL_12_0,
-		D3D_FEATURE_LEVEL_11_1,//PS4���炢�̕`�搫�\
+		D3D_FEATURE_LEVEL_11_1,//PS4くらいの描画性能
 		D3D_FEATURE_LEVEL_11_0,
 	};
-	//FEATURE_LEVEL�ɂ��ā@https://learn.microsoft.com/en-us/windows/win32/api/d3dcommon/ne-d3dcommon-d3d_feature_level
+	//FEATURE_LEVELについて　https://learn.microsoft.com/en-us/windows/win32/api/d3dcommon/ne-d3dcommon-d3d_feature_level
 
 	D3D_FEATURE_LEVEL featureLevel;
 
-	for (auto lv : levels)//auto�͕ϐ��̌^�������ŕۊǂ��Ă����	for (int i = 0; i < 4; ++i){D3D_FEATURE_LEVEL lv = levels[i];}
+	for (auto lv : levels)//autoは変数の型を自動で保管してくれる	for (int i = 0; i < 4; ++i){D3D_FEATURE_LEVEL lv = levels[i];}
 	{
-		if (D3D12CreateDevice(nullptr, lv, IID_PPV_ARGS(&_dev)) == S_OK)//ppDevice��NULL�Ŋ֐������������ꍇ�A S_OK�ł͂Ȃ�S_FALSE���Ԃ���܂��B����̏ꍇ�����Ɠ����Ă���B�S�����͍��f�o�C�X���i�[����ꏊ�B
+		if (D3D12CreateDevice(nullptr, lv, IID_PPV_ARGS(&_dev)) == S_OK)//ppDeviceがNULLで関数が成功した場合、 S_OKではなくS_FALSEが返されます。今回の場合ちゃんと入っている。４引数は作るデバイスを格納する場所。
 		{
 			featureLevel = lv;
-			cout << lv;
 			break;
 		}
 	}
 	
+	result = _dev->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&_cmdAllocator));//_devというクラス型の変数にCreateCommandAllocator　一つ目の引数はコマンドアロケーターの種類
+	result = _dev->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, _cmdAllocator, nullptr, IID_PPV_ARGS(&_cmdList));//コマンドアロケーターはコマンドリストの命令が乗ってる　コマンドアロケーターを教本ではコマンドリストの招待と記述されている
+	
+	//D3D12_COMMAND_QUEUE_DESC構造体について
+	/*
+	1	[in]	UINT	nodeMask	マルチGPU環境で、どのグラフィックボードでこのリストを作るかを指定するマスク値。単一GPUの場合は 0 を指定します。
+	2	[in]	D3D12_COMMAND_LIST_TYPE	type	作成するコマンドリストの種類（DIRECT や BUNDLE など）。アロケータの種類と一致させる必要があります。
+	3	[in]	ID3D12CommandAllocator*	pCommandAllocator	先ほど作成したコマンドアロケータのポインタをここに渡します。リストが命令を記録する際のメモリの提供元になります。
+	4	[in, optional]	ID3D12PipelineState*	pInitialState	コマンドリストの初期パイプライン状態（PSO）。何も指定しない（既定値のままにする）場合は nullptr で大丈夫です。
+	5	[out]	void**	ppCommandList	【出口】 作成されたコマンドリストの受け取り場所です。ここも通常は IID_PPV_ARGS(&myCommandList) の形でお決まりの指定をします。
+	*/
+
+	D3D12_COMMAND_QUEUE_DESC cmdQueneDesc = {};//コマンドキュー構造体の初期化
+
+	cmdQueneDesc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;//キューの種類を決める
+	cmdQueneDesc.Priority = D3D12_COMMAND_QUEUE_PRIORITY_NORMAL;
+	cmdQueneDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
+	cmdQueneDesc.NodeMask = 0;
+
+	result = _dev->CreateCommandQueue(&cmdQueneDesc, IID_PPV_ARGS(&_cmdQuene));
+
+	DXGI_SWAP_CHAIN_DESC1 swapChainDesc = {};
+
+	//DXGI_SWAP_CHAIN_DESC1構造体について
+	/*
+	Width / Height
+バックバッファーの解像度の幅と高さ。HWND用では 0 を指定するとウィンドウサイズから自動取得されます。
+
+Format
+画面の表示ピクセルフォーマット（DXGI_FORMAT）を指定します。
+
+Stereo
+ステレオ3D表示に対応するかどうか（TRUE / FALSE）。
+
+SampleDesc
+マルチサンプリング（MSAA）のパラメータ。フリップモデルでは Count=1, Quality=0 に設定する必要があります。
+
+BufferUsage
+バックバッファーの用途（レンダーターゲットやシェーダー入力など）。
+
+BufferCount
+スワップチェーンに含めるバッファーの総数（フリップモデルでは2〜16）。
+
+Scaling
+ターゲット出力のサイズに合わせた伸縮・サイズ変更の挙動（DXGI_SCALING）。
+
+SwapEffect
+画面更新（プレゼンテーション）のモデル（DXGI_SWAP_EFFECT）。モダンなアプリでは通常フリップモデルを指定します。
+
+AlphaMode
+バックバッファーの透過（アルファチャネル）の扱い（DXGI_ALPHA_MODE）。
+
+Flags
+スワップチェーンの動作オプションを制御するフラグ（DXGI_SWAP_CHAIN_FLAG）の組み合わせ。
+	*/
+
+	swapChainDesc.Width = window_width;
+	swapChainDesc.Height = window_height;
+	swapChainDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	swapChainDesc.Stereo = false;
+	swapChainDesc.SampleDesc.Count = 1;
+	swapChainDesc.SampleDesc.Quality = 0;
+	swapChainDesc.BufferUsage = DXGI_USAGE_BACK_BUFFER;
+	swapChainDesc.BufferCount = 2;
+	swapChainDesc.Scaling = DXGI_SCALING_STRETCH;
+	swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
+	swapChainDesc.AlphaMode = DXGI_ALPHA_MODE_UNSPECIFIED;
+	swapChainDesc.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
+
+
+	result = _dxgiFactory->CreateSwapChainForHwnd(_cmdQuene, hwnd, &swapChainDesc, nullptr, nullptr, (IDXGISwapChain1**)&_swapchain);
+
+	/*
+	1. Type (D3D12_COMMAND_LIST_TYPE)
+コマンドキューの種類（型）を指定します。GPUにどのような種類の命令を処理させるかを決定する重要な設定です。
+
+主な値:
+
+D3D12_COMMAND_LIST_TYPE_DIRECT: 通常のレンダリング（描画）や計算、コピーなど、すべてのコマンドを実行できる万能なキューです。
+
+D3D12_COMMAND_LIST_TYPE_COMPUTE: 非同期計算（コンピュートシェーダー）専用のキューです。
+
+D3D12_COMMAND_LIST_TYPE_COPY: データの転送（メインメモリ ⇔ VRAM 間など）専用の軽量なキューです。
+
+2. Priority (INT)
+コマンドキューの優先順位を指定します。
+
+GPUが複数のキューから命令を受け取っている場合に、どちらを優先して処理するかを制御します。
+
+主に D3D12_COMMAND_QUEUE_PRIORITY 列挙型（NORMAL や HIGH など）の値、またはグローバルリアルタイム優先度（GLOBAL_REALTIME）を指定します。
+
+3. Flags (D3D12_COMMAND_QUEUE_FLAGS)
+コマンドキューの追加オプション（挙動のフラグ）を指定します。
+
+主な値:
+
+D3D12_COMMAND_QUEUE_FLAG_NONE: 特別なオプションなし（通常はこれ）。
+
+D3D12_COMMAND_QUEUE_FLAG_DISABLE_GPU_TIMEOUT: GPUのタイムアウト（TDR: 応答停止と回復）を無効化します。ただし、これを使用するには開発者モードなどの特定の権限が必要です。
+
+4. NodeMask (UINT)
+マルチGPU（複数のグラフィックボードやアダプター）環境において、どのGPUノードでこのキューを動作させるかをビットマスクで指定します。
+
+単一GPUの場合: 0 を設定します。
+
+マルチGPUの場合: コマンドキューを適用したい物理ノードに対応するビットを1つだけ立てます（例: 1番目のGPUなら 1）。
+	*/
+
 	while (true)
 	{
 		if (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE))
@@ -144,16 +252,6 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)//Windows�A�v���N���̂��߂�M
 			break;
 		}
 	}
-
-	result = _dev->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&_cmdAllocator));//_dev�Ƃ����N���X�^�̕ϐ���CreateCommandAllocator�@��ڂ̈����̓R�}���h�A���P�[�^�[�̎��
-	result = _dev->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, _cmdAllocator, nullptr, IID_PPV_ARGS(&_cmdList));
-	/*
-	1	[in]	UINT	nodeMask	�}���`GPU���ŁA�ǂ̃O���t�B�b�N�{�[�h�ł��̃��X�g����邩���w�肷��}�X�N�l�B�P��GPU�̏ꍇ�� 0 ���w�肵�܂��B
-	2	[in]	D3D12_COMMAND_LIST_TYPE	type	�쐬����R�}���h���X�g�̎�ށiDIRECT �� BUNDLE �Ȃǁj�B�A���P�[�^�̎�ނƈ�v������K�v������܂��B
-	3	[in]	ID3D12CommandAllocator*	pCommandAllocator	��قǍ쐬�����R�}���h�A���P�[�^�̃|�C���^�������ɓn���܂��B���X�g�����߂��L�^����ۂ̃������̒񋟌��ɂȂ�܂��B
-	4	[in, optional]	ID3D12PipelineState*	pInitialState	�R�}���h���X�g�̏����p�C�v���C����ԁiPSO�j�B�����w�肵�Ȃ��i����l�̂܂܂ɂ���j�ꍇ�� nullptr �ő��v�ł��B
-	5	[out]	void**	ppCommandList	�y�o���z �쐬���ꂽ�R�}���h���X�g�̎󂯎��ꏊ�ł��B�������ʏ�� IID_PPV_ARGS(&myCommandList) �̌`�ł����܂�̎w������܂��B
-	*/
 
 	UnregisterClass(w.lpszClassName, w.hInstance);
 	return 0;
