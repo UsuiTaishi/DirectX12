@@ -36,11 +36,11 @@ const UINT window_height = 720;
 //アドレス設定
 IDXGIFactory6* _dxgiFactory = nullptr; //グラボを探したり、画面の管理をしたりする大元の窓口
 ID3D12Device* _dev = nullptr;//アダプターを選択したのちにグラボの中に作られる。コマンドアロケーターとかテクスチャバッファなどが必要としてる分を切り出す働き
-IDXGISwapChain4* _swapchain = nullptr;
 ID3D12CommandAllocator* _cmdAllocator = nullptr;//コマンドアロケーターの宣言と初期化、コマンドリストより先に宣言する←コマンドアロケーターに小窓リストは保存されるから
 ID3D12GraphicsCommandList* _cmdList = nullptr;//コマンドリストの宣言と初期化
 ID3D12CommandQueue* _cmdQuene = nullptr;
-
+IDXGISwapChain4* _swapchain = nullptr;
+ID3D12DescriptorHeap* _descriptorHeap = nullptr;
 
 //プロトタイプ宣言
 #ifdef _DEBUG
@@ -239,6 +239,8 @@ D3D12_COMMAND_QUEUE_FLAG_DISABLE_GPU_TIMEOUT: GPUのタイムアウト（TDR: �
 
 マルチGPUの場合: コマンドキューを適用したい物理ノードに対応するビットを1つだけ立てます（例: 1番目のGPUなら 1）。
 	*/
+
+
 
 	while (true)
 	{
