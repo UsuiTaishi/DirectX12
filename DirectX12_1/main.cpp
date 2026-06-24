@@ -40,7 +40,7 @@ ID3D12CommandAllocator* _cmdAllocator = nullptr;//コマンドアロケーター
 ID3D12GraphicsCommandList* _cmdList = nullptr;//コマンドリストの宣言と初期化
 ID3D12CommandQueue* _cmdQuene = nullptr;
 IDXGISwapChain4* _swapchain = nullptr;
-ID3D12DescriptorHeap* _descriptorHeap = nullptr;
+ID3D12DescriptorHeap* _descriptorHeap = nullptr;//ディスクリプタヒープの宣言と初期化 バッファーのデータをシェーダーで使う時に必要な仕様書
 
 //プロトタイプ宣言
 #ifdef _DEBUG
@@ -49,7 +49,7 @@ int main(){
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)//Windowsアプリ起動のためのMain関数
 {
 #endif
-	DebugOutputFormatString("Show window test.");
+	DebugOutputFormatString("Show window test.\n");
 
 	WNDCLASSEX w = {};
 	w.cbSize = sizeof(WNDCLASSEX);
@@ -145,6 +145,42 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)//Windowsアプリ起動の�
 	*/
 
 	D3D12_COMMAND_QUEUE_DESC cmdQueneDesc = {};//コマンドキュー構造体の初期化
+	//D3D12_COMMAND_QUEUE_DESC構造体について
+	/*
+1. Type (D3D12_COMMAND_LIST_TYPE)
+コマンドキューの種類（型）を指定します。GPUにどのような種類の命令を処理させるかを決定する重要な設定です。
+
+主な値:
+
+D3D12_COMMAND_LIST_TYPE_DIRECT: 通常のレンダリング（描画）や計算、コピーなど、すべてのコマンドを実行できる万能なキューです。
+
+D3D12_COMMAND_LIST_TYPE_COMPUTE: 非同期計算（コンピュートシェーダー）専用のキューです。
+
+D3D12_COMMAND_LIST_TYPE_COPY: データの転送（メインメモリ ⇔ VRAM 間など）専用の軽量なキューです。
+
+2. Priority (INT)
+コマンドキューの優先順位を指定します。
+
+GPUが複数のキューから命令を受け取っている場合に、どちらを優先して処理するかを制御します。
+
+主に D3D12_COMMAND_QUEUE_PRIORITY 列挙型（NORMAL や HIGH など）の値、またはグローバルリアルタイム優先度（GLOBAL_REALTIME）を指定します。
+
+3. Flags (D3D12_COMMAND_QUEUE_FLAGS)
+コマンドキューの追加オプション（挙動のフラグ）を指定します。
+
+主な値:
+
+D3D12_COMMAND_QUEUE_FLAG_NONE: 特別なオプションなし（通常はこれ）。
+
+D3D12_COMMAND_QUEUE_FLAG_DISABLE_GPU_TIMEOUT: GPUのタイムアウト（TDR: 応答停止と回復）を無効化します。ただし、これを使用するには開発者モードなどの特定の権限が必要です。
+
+4. NodeMask (UINT)
+マルチGPU（複数のグラフィックボードやアダプター）環境において、どのGPUノードでこのキューを動作させるかをビットマスクで指定します。
+
+単一GPUの場合: 0 を設定します。
+
+マルチGPUの場合: コマンドキューを適用したい物理ノードに対応するビットを1つだけ立てます（例: 1番目のGPUなら 1）。
+	*/
 
 	cmdQueneDesc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;//キューの種類を決める
 	cmdQueneDesc.Priority = D3D12_COMMAND_QUEUE_PRIORITY_NORMAL;
@@ -204,43 +240,40 @@ Flags
 
 	result = _dxgiFactory->CreateSwapChainForHwnd(_cmdQuene, hwnd, &swapChainDesc, nullptr, nullptr, (IDXGISwapChain1**)&_swapchain);
 
+	D3D12_DESCRIPTOR_HEAP_DESC descriptorHeapDesc = {};
+
+	//D3D12_DESCRIPTOR_HEAP構造体について
 	/*
-	1. Type (D3D12_COMMAND_LIST_TYPE)
-コマンドキューの種類（型）を指定します。GPUにどのような種類の命令を処理させるかを決定する重要な設定です。
-
-主な値:
-
-D3D12_COMMAND_LIST_TYPE_DIRECT: 通常のレンダリング（描画）や計算、コピーなど、すべてのコマンドを実行できる万能なキューです。
-
-D3D12_COMMAND_LIST_TYPE_COMPUTE: 非同期計算（コンピュートシェーダー）専用のキューです。
-
-D3D12_COMMAND_LIST_TYPE_COPY: データの転送（メインメモリ ⇔ VRAM 間など）専用の軽量なキューです。
-
-2. Priority (INT)
-コマンドキューの優先順位を指定します。
-
-GPUが複数のキューから命令を受け取っている場合に、どちらを優先して処理するかを制御します。
-
-主に D3D12_COMMAND_QUEUE_PRIORITY 列挙型（NORMAL や HIGH など）の値、またはグローバルリアルタイム優先度（GLOBAL_REALTIME）を指定します。
-
-3. Flags (D3D12_COMMAND_QUEUE_FLAGS)
-コマンドキューの追加オプション（挙動のフラグ）を指定します。
-
-主な値:
-
-D3D12_COMMAND_QUEUE_FLAG_NONE: 特別なオプションなし（通常はこれ）。
-
-D3D12_COMMAND_QUEUE_FLAG_DISABLE_GPU_TIMEOUT: GPUのタイムアウト（TDR: 応答停止と回復）を無効化します。ただし、これを使用するには開発者モードなどの特定の権限が必要です。
-
-4. NodeMask (UINT)
-マルチGPU（複数のグラフィックボードやアダプター）環境において、どのGPUノードでこのキューを動作させるかをビットマスクで指定します。
-
-単一GPUの場合: 0 を設定します。
-
-マルチGPUの場合: コマンドキューを適用したい物理ノードに対応するビットを1つだけ立てます（例: 1番目のGPUなら 1）。
+	データ型： D3D12_DESCRIPTOR_HEAP_TYPE
+	意味： このヒープに「何の目的のデータ（記述子）」を格納するかを指定します。
+	データ型： UINT
+	意味： このヒープの中に記述子を何個分確保するかという「部屋の数」を指定します。
+	データ型： D3D12_DESCRIPTOR_HEAP_FLAGS
+	意味： ヒープの動作オプションを指定します。
+	データ型： UINT
+	意味： パソコンに複数のグラフィックボード（GPU）が搭載されている場合（マルチアダプターシステム）、どのGPUに対してこのヒープを作成するかを指定するビットマスクです。
 	*/
+	
+	descriptorHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
+	descriptorHeapDesc.NodeMask = 0;
+	descriptorHeapDesc.NumDescriptors = 2;
+	descriptorHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
+
+	result = _dev->CreateDescriptorHeap(&descriptorHeapDesc,IID_PPV_ARGS(&_descriptorHeap));
+
+	D3D12_CPU_DESCRIPTOR_HANDLE handle = _descriptorHeap->GetCPUDescriptorHandleForHeapStart();
+
+	vector<ID3D12Resource*> _backbuffers(swapChainDesc.BufferCount);
+	for (UINT index = 0; index < swapChainDesc.BufferCount; ++index)
+	{
+		result = _swapchain->GetBuffer(index, IID_PPV_ARGS(&_backbuffers[index]));
+		_dev->CreateRenderTargetView(_backbuffers[index], nullptr, handle);//バックバッファそれぞれに対しレンダーターゲットビューは作らないといけない
+		handle.ptr += _dev->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+	}
 
 
+
+	//_backbufferにバックバッファーが入る。for文で回すたびに配列にぶち込まれていくぅ
 
 	while (true)
 	{
