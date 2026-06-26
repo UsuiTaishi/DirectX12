@@ -41,6 +41,15 @@ ID3D12GraphicsCommandList* _cmdList = nullptr;//コマンドリストの宣言�
 ID3D12CommandQueue* _cmdQuene = nullptr;
 IDXGISwapChain4* _swapchain = nullptr;
 ID3D12DescriptorHeap* _descriptorHeap = nullptr;//ディスクリプタヒープの宣言と初期化 バッファーのデータをシェーダーで使う時に必要な仕様書
+ID3D12Fence* _fence = nullptr;
+
+void EnableDebugLayer() {
+	ID3D12Debug* debugLayer = nullptr;
+	if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&debugLayer)))) {
+		debugLayer->EnableDebugLayer();
+		debugLayer->Release();
+	}
+}
 
 //プロトタイプ宣言
 #ifdef _DEBUG
@@ -74,10 +83,26 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)//Windowsアプリ起動の�
 		nullptr);//追加パラメータ
 	ShowWindow(hwnd, SW_SHOW);//ウィンドウ表示
 
-	MSG msg = {};
-
-	auto result = CreateDXGIFactory1(IID_PPV_ARGS(&_dxgiFactory));//最初のほうで宣言した _dxgiFactoryにぶち込む	二つ目の変数は作った工場をぶち込む場所
+#ifdef _DEBUG
+	//デバッグレイヤーをオンに
+	EnableDebugLayer();
+	CreateDXGIFactory2(DXGI_CREATE_FACTORY_DEBUG, IID_PPV_ARGS(&_dxgiFactory));
+#else
+	CreateDXGIFactory1(IID_PPV_ARGS(&_dxgiFactory));//最初のほうで宣言した _dxgiFactoryにぶち込む	二つ目の変数は作った工場をぶち込む場所（型とアドレスのマクロ）
+#endif
+	UINT fenceVal = 0;
 	//IID_PPY_ARGSはポインターを渡すとインターフェースIDと保存場所を返す
+
+	D3D_FEATURE_LEVEL levels[] =
+	{
+		D3D_FEATURE_LEVEL_12_1,//レイトレーシングにも対応してる
+		D3D_FEATURE_LEVEL_12_0,
+		D3D_FEATURE_LEVEL_11_1,//PS4くらいの描画性能
+		D3D_FEATURE_LEVEL_11_0,
+	};
+	//FEATURE_LEVELについて　https://learn.microsoft.com/en-us/windows/win32/api/d3dcommon/ne-d3dcommon-d3d_feature_level
+
+	HRESULT result;
 
 	vector<IDXGIAdapter*> adapters;//可変長配列　ドライバーをこれからここに追加していく
 	IDXGIAdapter* tmpAdapter = nullptr;//これから配列に入るやつに仮で名前を与える。forで回すため？
@@ -112,14 +137,6 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)//Windowsアプリ起動の�
 			break;
 		}
 	}//strDescにグラボの名前が登録される。高性能グラボが入れるにはもう少しコードが必要
-	D3D_FEATURE_LEVEL levels[] =
-	{
-		D3D_FEATURE_LEVEL_12_1,//レイトレーシングにも対応してる
-		D3D_FEATURE_LEVEL_12_0,
-		D3D_FEATURE_LEVEL_11_1,//PS4くらいの描画性能
-		D3D_FEATURE_LEVEL_11_0,
-	};
-	//FEATURE_LEVELについて　https://learn.microsoft.com/en-us/windows/win32/api/d3dcommon/ne-d3dcommon-d3d_feature_level
 
 	D3D_FEATURE_LEVEL featureLevel;
 
@@ -237,7 +254,6 @@ Flags
 	swapChainDesc.AlphaMode = DXGI_ALPHA_MODE_UNSPECIFIED;
 	swapChainDesc.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
 
-
 	result = _dxgiFactory->CreateSwapChainForHwnd(_cmdQuene, hwnd, &swapChainDesc, nullptr, nullptr, (IDXGISwapChain1**)&_swapchain);
 
 	D3D12_DESCRIPTOR_HEAP_DESC descriptorHeapDesc = {};
@@ -261,19 +277,26 @@ Flags
 
 	result = _dev->CreateDescriptorHeap(&descriptorHeapDesc,IID_PPV_ARGS(&_descriptorHeap));
 
-	D3D12_CPU_DESCRIPTOR_HANDLE handle = _descriptorHeap->GetCPUDescriptorHandleForHeapStart();
-
-	vector<ID3D12Resource*> _backbuffers(swapChainDesc.BufferCount);
+	D3D12_CPU_DESCRIPTOR_HANDLE handle = _descriptorHeap->GetCPUDescriptorHandleForHeapStart();//ヒープの「先頭の住所」を handle に入れる（例：ptr = 0x1000）HANDLEはディスクリプターヒープにあるディスクリプターの境目の位置のことです。
+	//スワップチェーン上のバックバッファをディスクリプタに渡してるってこと？
+	vector<ID3D12Resource*> _backbuffers(swapChainDesc.BufferCount);//ID3D12Resourceはテクスチャも、ポリゴンの頂点データ、行列のパラメータなど設定によって異なるデータに変わる。可変長配列の数は（）で指定できる
 	for (UINT index = 0; index < swapChainDesc.BufferCount; ++index)
 	{
-		result = _swapchain->GetBuffer(index, IID_PPV_ARGS(&_backbuffers[index]));
-		_dev->CreateRenderTargetView(_backbuffers[index], nullptr, handle);//バックバッファそれぞれに対しレンダーターゲットビューは作らないといけない
-		handle.ptr += _dev->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+		result = _swapchain->GetBuffer(index, IID_PPV_ARGS(&_backbuffers[index]));//IDXGISwapChain::GetBuffer_①何番目のバッファーを、②どの型で、③どこの変数に格納するか
+		_dev->CreateRenderTargetView(_backbuffers[index], nullptr, handle);//バックバッファそれぞれに対しレンダーターゲットビューは作らないといけない。バックバッファのデータをレンダーターゲットビュー加工する指示
+		handle.ptr += _dev->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);//「バックバッファをRTVという仕様書（ディスクリプタ）にして、いま handle が指しているヒープの始点に直接書き込む（ぶち込む）」という作業をこの関数が一瞬で行っています。同じとこにぶち込まないようにポインタをずらしてる
 	}
 
+	//レンダーターゲットビュー（RTV）は、ディスクリプター（記述子）の一種です。
+	//なぜ「Resource」と「Descriptor」を分けるの？A.元データ（Resource）は1つの使い回しですが、「どう使うか（Descriptor）」によって、いくらでも役割を変えられるように、DX12ではあえて別々に分離しているのです。どう使うかの解釈方法は意外にも少なく４つだけ
 
 
 	//_backbufferにバックバッファーが入る。for文で回すたびに配列にぶち込まれていくぅ
+
+	result = _cmdAllocator->Reset();//コマンドアロケータを白紙にする
+
+	MSG msg = {};
+	result = _dev->CreateFence(fenceVal, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&_fence));
 
 	while (true)
 	{
@@ -286,8 +309,33 @@ Flags
 		{
 			break;
 		}
+
+
+		result = _cmdAllocator->Reset();//コマンドアロケータを白紙にする
+
+		auto backBufferindex = _swapchain->GetCurrentBackBufferIndex();//表裏ある2つの画面の内、描画計算する裏の画面を特定している？
+
+		auto rtvH = _descriptorHeap->GetCPUDescriptorHandleForHeapStart();//とりあえずディスクリプタヒープの先頭を取得する
+		rtvH.ptr += backBufferindex * _dev->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV); //バックバッファのメモリの先頭位置を取得するためバックバッファのインデックスが 0 のとき（1枚目の画面）：0 * 1マスのサイズ を足すので、移動量は 0。つまり、マンションの先頭である $S_1$ の住所 になります。バックバッファのインデックスが 1 のとき（2枚目の画面）：1 * 1マスのサイズ を足すので、ちょうど1部屋分後ろにズレます。つまり、$S_2$ の住所 になります。
+		_cmdList->OMSetRenderTargets(1, &rtvH, false, nullptr);
+
+		float clearColor[] = { 0.1f, 0.4f,  1.0f, 1.0f };//画面の色決め
+		_cmdList->ClearRenderTargetView(rtvH, clearColor, 0, nullptr);//
+		_cmdList->Close();
+
+		ID3D12CommandList* cmdlists[] = { _cmdList };
+		_cmdQuene->ExecuteCommandLists(1, cmdlists);//コマンドアロケータを実行しやがれ
+
+		_cmdAllocator->Reset();
+		_cmdList->Reset(_cmdAllocator, nullptr);
+
+		_cmdQuene->Signal(_fence, ++fenceVal);
+
+		_swapchain->Present(1, 0);//フリップ
+
 	}
 
 	UnregisterClass(w.lpszClassName, w.hInstance);
 	return 0;
+
 }
