@@ -290,13 +290,12 @@ Flags
 	//レンダーターゲットビュー（RTV）は、ディスクリプター（記述子）の一種です。
 	//なぜ「Resource」と「Descriptor」を分けるの？A.元データ（Resource）は1つの使い回しですが、「どう使うか（Descriptor）」によって、いくらでも役割を変えられるように、DX12ではあえて別々に分離しているのです。どう使うかの解釈方法は意外にも少なく４つだけ
 
-
 	//_backbufferにバックバッファーが入る。for文で回すたびに配列にぶち込まれていくぅ
 
 	result = _cmdAllocator->Reset();//コマンドアロケータを白紙にする
 
 	MSG msg = {};
-	result = _dev->CreateFence(fenceVal, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&_fence));
+	result = _dev->CreateFence(fenceVal, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&_fence));//fenceはCPUがGPUに送ったコマンドキュー　フェンスの値はGPUが終えた処理のフレーム番号
 
 	while (true)
 	{
@@ -329,7 +328,17 @@ Flags
 		_cmdAllocator->Reset();
 		_cmdList->Reset(_cmdAllocator, nullptr);
 
-		_cmdQuene->Signal(_fence, ++fenceVal);
+		_cmdQuene->Signal(_fence, ++fenceVal);//fenceValを現在のフレーム数＋1にする。GPUに対し今やってる描画計算が終わったらfenceの値を１個増やす指示　GPUの仕事の完了をCPUが知るために　コマンドキューの最後にfenceの値を増やす指示書を配置する
+		if (_fence->GetCompletedValue() != fenceVal)//GetCompletedValueは現在のfenceの値を返す関数
+		{
+			auto event = CreateEvent(nullptr, false, false, nullptr);
+
+			_fence->SetEventOnCompletion(fenceVal, event);//フェンスの値がfenceValつまり描画計算が終わったらeventが発生する。
+
+			WaitForSingleObject(event, INFINITE);
+
+			CloseHandle(event);
+		}
 
 		_swapchain->Present(1, 0);//フリップ
 
@@ -337,5 +346,4 @@ Flags
 
 	UnregisterClass(w.lpszClassName, w.hInstance);
 	return 0;
-
 }
