@@ -3,12 +3,16 @@
 #include<d3d12.h>
 #include<dxgi1_6.h>
 #include<vector>
+#include<DirectXMath.h>
+#include<d3dcompiler.h>
+#include"polygon.h"
 #ifdef _DEBUG
 #include<iostream>
 #endif
 
 #pragma comment(lib,"dxgi.lib")
 #pragma comment(lib,"d3d12.lib")
+#pragma comment(lib,"d3dcompiler.lib")
 
 using namespace std;
 
@@ -42,6 +46,7 @@ ID3D12CommandQueue* _cmdQuene = nullptr;
 IDXGISwapChain4* _swapchain = nullptr;
 ID3D12DescriptorHeap* _descriptorHeap = nullptr;//ディスクリプタヒープの宣言と初期化 バッファーのデータをシェーダーで使う時に必要な仕様書
 ID3D12Fence* _fence = nullptr;
+ID3D12Resource* vertBuff = nullptr;//りそーすを作って保存するとこ
 
 void EnableDebugLayer() {
 	ID3D12Debug* debugLayer = nullptr;
@@ -53,7 +58,7 @@ void EnableDebugLayer() {
 
 //プロトタイプ宣言
 #ifdef _DEBUG
-int main(){
+int main() {
 #else
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)//Windowsアプリ起動のためのMain関数
 {
@@ -148,10 +153,10 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)//Windowsアプリ起動の�
 			break;
 		}
 	}
-	
+
 	result = _dev->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&_cmdAllocator));//_devというクラス型の変数にCreateCommandAllocator　一つ目の引数はコマンドアロケーターの種類
 	result = _dev->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, _cmdAllocator, nullptr, IID_PPV_ARGS(&_cmdList));//コマンドアロケーターはコマンドリストの命令が乗ってる　コマンドアロケーターを教本ではコマンドリストの招待と記述されている
-	
+
 	//D3D12_COMMAND_QUEUE_DESC構造体について
 	/*
 	1	[in]	UINT	nodeMask	マルチGPU環境で、どのグラフィックボードでこのリストを作るかを指定するマスク値。単一GPUの場合は 0 を指定します。
@@ -269,13 +274,13 @@ Flags
 	データ型： UINT
 	意味： パソコンに複数のグラフィックボード（GPU）が搭載されている場合（マルチアダプターシステム）、どのGPUに対してこのヒープを作成するかを指定するビットマスクです。
 	*/
-	
+
 	descriptorHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
 	descriptorHeapDesc.NodeMask = 0;
 	descriptorHeapDesc.NumDescriptors = 2;
 	descriptorHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
 
-	result = _dev->CreateDescriptorHeap(&descriptorHeapDesc,IID_PPV_ARGS(&_descriptorHeap));
+	result = _dev->CreateDescriptorHeap(&descriptorHeapDesc, IID_PPV_ARGS(&_descriptorHeap));
 
 	D3D12_CPU_DESCRIPTOR_HANDLE handle = _descriptorHeap->GetCPUDescriptorHandleForHeapStart();//ヒープの「先頭の住所」を handle に入れる（例：ptr = 0x1000）HANDLEはディスクリプターヒープにあるディスクリプターの境目の位置のことです。
 	//スワップチェーン上のバックバッファをディスクリプタに渡してるってこと？
@@ -292,7 +297,107 @@ Flags
 
 	//_backbufferにバックバッファーが入る。for文で回すたびに配列にぶち込まれていくぅ
 
-	result = _cmdAllocator->Reset();//コマンドアロケータを白紙にする
+
+	//こっから頂点データをGPUに送って解釈してもらうためのゾーン？
+	D3D12_HEAP_PROPERTIES heapProperties = //ヒープ設定構造体を設定
+	{
+		D3D12_HEAP_TYPE_UPLOAD,
+		D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
+		D3D12_MEMORY_POOL_UNKNOWN,
+		0,
+		0,
+	};
+
+	D3D12_RESOURCE_DESC setResource = //リソース設定構造体を設定
+	{
+		D3D12_RESOURCE_DIMENSION_BUFFER,
+        0,
+        sizeof(vertices),//Unmap（アンマップ）を呼び出し、「データのコピーが終わったので、接続を解除します」とGPUに伝えています
+        1,
+        1,
+        1,
+        DXGI_FORMAT_UNKNOWN, // UNKNOWN → DXGI_FORMAT_UNKNOWN
+        {1, 0},
+        D3D12_TEXTURE_LAYOUT_ROW_MAJOR, // D3D12_TEXTURE_lAYOUT_ROW_MAJOR → D3D12_TEXTURE_LAYOUT_ROW_MAJOR
+        D3D12_RESOURCE_FLAG_NONE, // NONE → D3D12_RESOURCE_FLAG_NONE
+    };
+
+	_dev->CreateCommittedResource(
+		&heapProperties,
+		D3D12_HEAP_FLAG_NONE,
+		&setResource,
+		D3D12_RESOURCE_STATE_GENERIC_READ,
+		nullptr,
+		IID_PPV_ARGS(&vertBuff)
+		);
+
+	XMFLOAT3 *vertMap = nullptr;//ポインターを受け取り保存するため
+
+	vertBuff->Map(0, nullptr, (void**)&vertMap);//先ほど用意した vertMap にGPUメモリへ繋がる住所が格納されます。これにより、CPUから直接GPUのメモリへデータを書き込める状態になります。
+
+	copy(begin(vertices), end(vertices), vertMap);//何をしているか: std::copy を使って、CPU側のメモリにある頂点配列（vertices）の中身を、先ほど取得したGPU側の住所（vertMap）へごっそりコピーしています。一応ここで頂点バッファが完成
+
+	vertBuff->Unmap(0, nullptr);
+
+
+	D3D12_VERTEX_BUFFER_VIEW vbView = //構造体
+	{
+		vertBuff->GetGPUVirtualAddress(),
+		sizeof(vertices),
+		sizeof(vertices),
+	};
+
+	//こっから頂点バッファというただの数列の解釈の方法が描いてある説明書を作る。各頂点をここで区別できるようになる。
+	//この時点では１頂点のデータがそれぞれ何を表しているかまでは設定できてない。
+
+	//さっき作った説明書をGPUに送る
+	_cmdList->IASetVertexBuffers(0, 1, &vbView);
+
+	//こっからシェーダーを読み込むための準備
+	ID3DBlob* vsBlob = nullptr;
+	ID3DBlob* psBlob = nullptr;
+	ID3DBlob* errorBlob = nullptr;
+	
+	D3DCompileFromFile(
+		L"VertexShader.hlsl",
+		nullptr,
+		D3D_COMPILE_STANDARD_FILE_INCLUDE,
+		"BasicVS",
+		"vs_5_0",
+		D3DCOMPILE_DEBUG,
+		0,
+		&vsBlob,
+		&errorBlob
+		);
+
+	D3DCompileFromFile(
+		L"PixelShader.hlsl",
+		nullptr,
+		D3D_COMPILE_STANDARD_FILE_INCLUDE,
+		"BasicPS",
+		"vs_5_0",
+		D3DCOMPILE_DEBUG,
+		0,
+		&psBlob,
+		&errorBlob
+	);
+	//シェーダをコンパイル
+
+	D3D12_INPUT_ELEMENT_DESC inputElement = { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 };
+
+	//ここまで
+
+	//こっからパイプラインステートを作ってく
+
+	D3D12_GRAPHICS_PIPELINE_STATE_DESC pipelineState = {};
+	pipelineState.VS.pShaderBytecode = vsBlob->GetBufferPointer();
+	pipelineState.VS.BytecodeLength = vsBlob->GetBufferSize();
+	pipelineState.PS.pShaderBytecode = psBlob->GetBufferPointer();
+	pipelineState.PS.BytecodeLength = psBlob->GetBufferSize();
+
+
+
+	_dev->CreateGraphicsPipelineState();
 
 	MSG msg = {};
 	result = _dev->CreateFence(fenceVal, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&_fence));//fenceはCPUがGPUに送ったコマンドキュー　フェンスの値はGPUが終えた処理のフレーム番号
