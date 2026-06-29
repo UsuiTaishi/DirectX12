@@ -126,6 +126,7 @@
     <ClCompile Include="DirectX12_2.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="PipeLineFacttory.h" />
     <ClInclude Include="polygon.h" />
   </ItemGroup>
   <ItemGroup>

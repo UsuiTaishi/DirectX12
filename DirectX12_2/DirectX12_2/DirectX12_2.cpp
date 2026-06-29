@@ -5,6 +5,7 @@
 #include<vector>
 #include<DirectXMath.h>
 #include<d3dcompiler.h>
+#include"PipeLineFacttory.h"
 #include"polygon.h"
 #ifdef _DEBUG
 #include<iostream>
@@ -47,6 +48,7 @@ IDXGISwapChain4* _swapchain = nullptr;
 ID3D12DescriptorHeap* _descriptorHeap = nullptr;//ディスクリプタヒープの宣言と初期化 バッファーのデータをシェーダーで使う時に必要な仕様書
 ID3D12Fence* _fence = nullptr;
 ID3D12Resource* vertBuff = nullptr;//りそーすを作って保存するとこ
+ID3D12PipelineState* mainPS = nullptr;
 
 void EnableDebugLayer() {
 	ID3D12Debug* debugLayer = nullptr;
@@ -384,7 +386,11 @@ Flags
 	//シェーダをコンパイル
 
 	D3D12_INPUT_ELEMENT_DESC inputElement = { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 };
-
+	const D3D12_INPUT_LAYOUT_DESC inputLayout =
+	{
+		&inputElement,//先頭の場所だけ教えてくれれば、あとは個数分だけこっちで勝手に後ろまでスキャンするよ」 というDirect3D側の効率的なルールのために、このような書き方になっています
+		1
+	};
 	//ここまで
 
 	//こっからパイプラインステートを作ってく
@@ -394,10 +400,19 @@ Flags
 	pipelineState.VS.BytecodeLength = vsBlob->GetBufferSize();
 	pipelineState.PS.pShaderBytecode = psBlob->GetBufferPointer();
 	pipelineState.PS.BytecodeLength = psBlob->GetBufferSize();
+	pipelineState.pRootSignature = nullptr;
+	pipelineState.BlendState = blend;
+	pipelineState.SampleMask = ;
+	pipelineState.RasterizerState = rasterizerSetting;
+	pipelineState.DepthStencilState= depthTest;
+	pipelineState.InputLayout = inputLayout;
+	pipelineState.IBStripCutValue = D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_0xFFFFFFFF;
+	pipelineState.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;//頂点をつなげて辺にするか面にするかそもそもつなげずに頂点だけにするか
+	pipelineState.NumRenderTargets = 1;
+	pipelineState.RTVFormats[0] = DXGI_FORMAT_R32G32B32_FLOAT;
 
 
-
-	_dev->CreateGraphicsPipelineState();
+	_dev->CreateGraphicsPipelineState(&pipelineState, IID_PPV_ARGS(&mainPS));
 
 	MSG msg = {};
 	result = _dev->CreateFence(fenceVal, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&_fence));//fenceはCPUがGPUに送ったコマンドキュー　フェンスの値はGPUが終えた処理のフレーム番号
