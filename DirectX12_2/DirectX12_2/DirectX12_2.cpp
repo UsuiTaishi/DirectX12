@@ -377,7 +377,7 @@ Flags
 		nullptr,
 		D3D_COMPILE_STANDARD_FILE_INCLUDE,
 		"BasicPS",
-		"vs_5_0",
+		"ps_5_0",
 		D3DCOMPILE_DEBUG,
 		0,
 		&psBlob,
@@ -395,6 +395,22 @@ Flags
 
 	//こっからパイプラインステートを作ってく
 
+	D3D12_RENDER_TARGET_BLEND_DESC rtBlend = {};
+		//FALSE,//レイヤー効果のような種類がある。
+		//FALSE,//論理演算を使った透明色の決定、あまり今風ではない、色反転とか
+		//「これから新しく描画しようとしているピクセルの色（ソース色）に対して、どのような比率（係数）を掛け算するか」を決める設定です。
+		//すでに画面（レンダーターゲット）に塗られている元の色に対して、どのような比率（係数）を掛け算するか
+	D3D12_BLEND_DESC blend = {};
+
+	rtBlend.BlendEnable = FALSE;
+	rtBlend.LogicOpEnable = FALSE;
+	rtBlend.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+	blend.RenderTarget[0] = rtBlend;
+
+	DXGI_SAMPLE_DESC sample = {};
+	sample.Count = 1;
+	sample.Quality = 0;
+
 	D3D12_GRAPHICS_PIPELINE_STATE_DESC pipelineState = {};
 	pipelineState.VS.pShaderBytecode = vsBlob->GetBufferPointer();
 	pipelineState.VS.BytecodeLength = vsBlob->GetBufferSize();
@@ -402,17 +418,18 @@ Flags
 	pipelineState.PS.BytecodeLength = psBlob->GetBufferSize();
 	pipelineState.pRootSignature = nullptr;
 	pipelineState.BlendState = blend;
-	pipelineState.SampleMask = ;
+	pipelineState.SampleMask = D3D12_DEFAULT_SAMPLE_MASK;
 	pipelineState.RasterizerState = rasterizerSetting;
 	pipelineState.DepthStencilState= depthTest;
 	pipelineState.InputLayout = inputLayout;
 	pipelineState.IBStripCutValue = D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_0xFFFFFFFF;
 	pipelineState.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;//頂点をつなげて辺にするか面にするかそもそもつなげずに頂点だけにするか
 	pipelineState.NumRenderTargets = 1;
-	pipelineState.RTVFormats[0] = DXGI_FORMAT_R32G32B32_FLOAT;
+	pipelineState.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
 
+	result = _dev->CreateGraphicsPipelineState(&pipelineState, IID_PPV_ARGS(&mainPS));
 
-	_dev->CreateGraphicsPipelineState(&pipelineState, IID_PPV_ARGS(&mainPS));
+	cout << "\n" << result;
 
 	MSG msg = {};
 	result = _dev->CreateFence(fenceVal, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&_fence));//fenceはCPUがGPUに送ったコマンドキュー　フェンスの値はGPUが終えた処理のフレーム番号
