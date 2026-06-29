@@ -49,6 +49,7 @@ ID3D12DescriptorHeap* _descriptorHeap = nullptr;//ディスクリプタヒープ
 ID3D12Fence* _fence = nullptr;
 ID3D12Resource* vertBuff = nullptr;//りそーすを作って保存するとこ
 ID3D12PipelineState* mainPS = nullptr;
+ID3D12RootSignature* rootSignature = nullptr;
 
 void EnableDebugLayer() {
 	ID3D12Debug* debugLayer = nullptr;
@@ -351,9 +352,7 @@ Flags
 
 	//こっから頂点バッファというただの数列の解釈の方法が描いてある説明書を作る。各頂点をここで区別できるようになる。
 	//この時点では１頂点のデータがそれぞれ何を表しているかまでは設定できてない。
-
 	//さっき作った説明書をGPUに送る
-	_cmdList->IASetVertexBuffers(0, 1, &vbView);
 
 	//こっからシェーダーを読み込むための準備
 	ID3DBlob* vsBlob = nullptr;
@@ -427,9 +426,36 @@ Flags
 	pipelineState.NumRenderTargets = 1;
 	pipelineState.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
 
+	//ここまで
+	//こっからルートシグネチャを作ってく
+	D3D12_ROOT_SIGNATURE_DESC rootSignatureDesc = {};
+	rootSignatureDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
+
+	ID3DBlob* rootSigBlob = nullptr;
+	D3D12SerializeRootSignature(&rootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1_0, &rootSigBlob, &errorBlob);
+	_dev->CreateRootSignature(0, rootSigBlob->GetBufferPointer(), rootSigBlob->GetBufferSize(), IID_PPV_ARGS(&rootSignature));
+
+	rootSigBlob->Release();
+
+	pipelineState.pRootSignature = rootSignature;
+
 	result = _dev->CreateGraphicsPipelineState(&pipelineState, IID_PPV_ARGS(&mainPS));
 
 	cout << "\n" << result;
+
+	D3D12_VIEWPORT viewport = {};
+	viewport.Width = 2*window_width/3;
+	viewport.Height = 2*window_height/3;
+	viewport.TopLeftX = window_width/6;
+	viewport.TopLeftY = window_height/6;
+	viewport.MaxDepth = 1.0;
+	viewport.MinDepth = 0.0;
+
+	D3D12_RECT scissorrect = {};
+	scissorrect.top = viewport.TopLeftY;
+	scissorrect.left = viewport.TopLeftX;
+	scissorrect.right = viewport.TopLeftX + viewport.Width;
+	scissorrect.bottom = viewport.TopLeftY + viewport.Height;
 
 	MSG msg = {};
 	result = _dev->CreateFence(fenceVal, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&_fence));//fenceはCPUがGPUに送ったコマンドキュー　フェンスの値はGPUが終えた処理のフレーム番号
@@ -461,12 +487,17 @@ Flags
 		_cmdList->ResourceBarrier(1, &BarrierDesc);
 
 		_cmdList->OMSetRenderTargets(1, &rtvH, false, nullptr);
-
+		//こっから書く内容をコマンドリストに書き込む
 		float clearColor[] = { 0.1f, 0.4f,  1.0f, 1.0f };//画面の色決め
 		_cmdList->ClearRenderTargetView(rtvH, clearColor, 0, nullptr);
 
-		BarrierDesc.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
-		BarrierDesc.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
+		_cmdList->SetPipelineState(mainPS);//調自由度のあるマテリアルを設定しているみたいな
+		_cmdList->SetGraphicsRootSignature(rootSignature);//使うルートシグネチャを決める
+		_cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+		_cmdList->IASetVertexBuffers(0, 1, &vbView);
+
+		BarrierDesc.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;//ここまでは書き込みよう
+		BarrierDesc.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;//ここからは画面表示用
 		_cmdList->ResourceBarrier(1, &BarrierDesc);
 
 		_cmdList->Close();

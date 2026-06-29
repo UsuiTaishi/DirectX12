@@ -34,6 +34,18 @@ const D3D12_DEPTH_STENCIL_DESC depthTest =
 	FALSE,//ステンシルテストを行うか否か
 	D3D12_DEFAULT_STENCIL_READ_MASK,//「今からステンシルバッファに数値を書き込むけど、このビットだけ書き換えて、それ以外は元の数字をキープして！」
 	D3D12_DEFAULT_STENCIL_WRITE_MASK,
+	{ // FrontFace (表面)
+		D3D12_STENCIL_OP_KEEP,          // StencilFailOp
+		D3D12_STENCIL_OP_KEEP,          // StencilDepthFailOp
+		D3D12_STENCIL_OP_KEEP,          // StencilPassOp
+		D3D12_COMPARISON_FUNC_ALWAYS    // StencilFunc
+	},
+	{ // BackFace (裏面)
+		D3D12_STENCIL_OP_KEEP,
+		D3D12_STENCIL_OP_KEEP,
+		D3D12_STENCIL_OP_KEEP,
+		D3D12_COMPARISON_FUNC_ALWAYS
+	}
 //なんかある
 //なんかある
 	};
