@@ -48,10 +48,10 @@ int WINAPI	WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 	//こっから初期化
 
 	XMFLOAT3 vertices[] = {
-	{-1.0f, -1.0f, 0.0f},
-	{-1.0f, 1.0f, 0.0f},
-	{1.0f, -1.0f, 0.0f},
-	{1.0f, 1.0f, 0.0f},
+	{-1.0f, -1.0f, 0.0f},//0
+	{-1.0f, 1.0f, 0.0f},//1
+	{1.0f, -1.0f, 0.0f},//2
+	{1.0f, 1.0f, 0.0f},//3
 	};
 
 	unsigned short indices[] = {
@@ -352,6 +352,18 @@ Flags
 		IID_PPV_ARGS(&indexBuff)
 	);
 
+	short* mappedIndex = nullptr;
+	indexBuff->Map(0, nullptr, (void**)&mappedIndex);
+	copy(begin(indices), end(indices), mappedIndex);
+	indexBuff->Unmap(0, nullptr);
+
+	//こっからインデックスバッファービューつくってく
+
+	D3D12_INDEX_BUFFER_VIEW ibView = {};
+	ibView.BufferLocation = indexBuff->GetGPUVirtualAddress();
+	ibView.Format = DXGI_FORMAT_R16_UINT;
+	ibView.SizeInBytes = sizeof(indices);
+
 	//こっからシェーダーを読み込むための準備
 	ID3DBlob* _vsBlob = nullptr;
 	ID3DBlob* _psBlob = nullptr;
@@ -519,7 +531,9 @@ Flags
 
 		_cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
 		_cmdList->IASetVertexBuffers(0, 1, &vbView);
+		_cmdList->IASetIndexBuffer(&ibView);
 		_cmdList->DrawInstanced(4, 1, 0, 0);
+		_cmdList->DrawIndexedInstanced(6, 1, 0, 0, 0);
 
 		BarrierDesc.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;//ここまでは書き込みよう
 		BarrierDesc.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;//ここからは画面表示用
@@ -551,3 +565,5 @@ Flags
 		_swapchain->Present(1, 0);//フリップ
 	}
 }
+
+//
