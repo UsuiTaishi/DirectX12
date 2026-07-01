@@ -2,7 +2,6 @@
 #include <tchar.h>
 #include <d3d12.h>
 #include <dxgi1_6.h>
-#include <DirectXMath.h>
 #include <vector>
 #include <d3dcompiler.h>
 
@@ -17,7 +16,6 @@
 #pragma comment(lib,"d3dcompiler.lib")
 
 using namespace std;
-using namespace DirectX;
 
 void DebugOutputFormatString(const char* format, ...)
 {
@@ -47,12 +45,20 @@ int WINAPI	WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 	
 	//こっから初期化
 
-	XMFLOAT3 vertices[] = {
+	Vertex vertices[] =
+	{
+		{{-1.0f, -1.0f, 0.0f},{-1.0f, -1.0f}},
+		{{-1.0f, 1.0f, 0.0f},{-1.0f, 1.0f}},
+		{{1.0f, -1.0f, 0.0f},{1.0f, -1.0f}},
+		{{1.0f, 1.0f, 0.0f}, {1.0f, 1.0f}},
+	};
+
+	/*XMFLOAT3 vertices[] = {
 	{-1.0f, -1.0f, 0.0f},//0
 	{-1.0f, 1.0f, 0.0f},//1
 	{1.0f, -1.0f, 0.0f},//2
 	{1.0f, 1.0f, 0.0f},//3
-	};
+	};*/
 
 	unsigned short indices[] = {
 		0,1,2,
@@ -322,11 +328,11 @@ Flags
 		IID_PPV_ARGS(&vertBuff)
 	);
 
-	XMFLOAT3* vertMap = nullptr;//ポインターを受け取り保存するため
+	Vertex* vertMap = nullptr;//ポインターを受け取り保存するため
 
 	vertBuff->Map(0, nullptr, (void**)&vertMap);//先ほど用意した vertMap にGPUメモリへ繋がる住所が格納されます。これにより、CPUから直接GPUのメモリへデータを書き込める状態になります。
 
-	copy(begin(vertices), end(vertices), vertMap);//何をしているか: std::copy を使って、CPU側のメモリにある頂点配列（vertices）の中身を、先ほど取得したGPU側の住所（vertMap）へごっそりコピーしています。一応ここで頂点バッファが完成
+	std::copy(begin(vertices), end(vertices), vertMap);//何をしているか: std::copy を使って、CPU側のメモリにある頂点配列（vertices）の中身を、先ほど取得したGPU側の住所（vertMap）へごっそりコピーしています。一応ここで頂点バッファが完成
 
 	vertBuff->Unmap(0, nullptr);
 
@@ -354,7 +360,7 @@ Flags
 
 	short* mappedIndex = nullptr;
 	indexBuff->Map(0, nullptr, (void**)&mappedIndex);
-	copy(begin(indices), end(indices), mappedIndex);
+	std::copy(begin(indices), end(indices), mappedIndex);
 	indexBuff->Unmap(0, nullptr);
 
 	//こっからインデックスバッファービューつくってく
@@ -396,6 +402,7 @@ Flags
 
 	D3D12_INPUT_ELEMENT_DESC inputLayout[] = {
 		{ "POSITION",0,DXGI_FORMAT_R32G32B32_FLOAT,0,D3D12_APPEND_ALIGNED_ELEMENT,D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,0 },
+		{"TEXCOORD", 0,DXGI_FORMAT_R32G32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT,D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,0 }
 	};
 
 	D3D12_GRAPHICS_PIPELINE_STATE_DESC gpipeline = {};
@@ -486,9 +493,9 @@ Flags
 	_cmdList->Close();
 
 	MSG msg = {};
-	unsigned int frame = 0;
 	
 	UINT fenceVal = 0;
+	UINT frame = 0;
 	result = _dev->CreateFence(fenceVal, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&_fence));//fenceはCPUがGPUに送ったコマンドキュー　フェンスの値はGPUが終えた処理のフレーム番号
 #ifdef _DEBUG
 	cout << result << "\n";
@@ -522,7 +529,8 @@ Flags
 
 		_cmdList->OMSetRenderTargets(1, &rtvH, false, nullptr);
 		//こっから書く内容をコマンドリストに書き込む
-		float clearColor[] = { 0.1f, 0.4f,  1.0f, 1.0f };//画面の色決め
+		float clearColor[] = { 0.1f, 0.4f,  (float)sin(0.01*frame), 1.0f };//画面の色決め
+		frame++;
 		_cmdList->ClearRenderTargetView(rtvH, clearColor, 0, nullptr);
 		_cmdList->SetPipelineState(_pipelinestate);
 		_cmdList->RSSetViewports(1, &viewport);
@@ -540,7 +548,7 @@ Flags
 		_cmdList->ResourceBarrier(1, &BarrierDesc);
 
 		_cmdList->Close();
-
+		
 		ID3D12CommandList* cmdlists[] = { _cmdList };
 		_cmdQuene->ExecuteCommandLists(1, cmdlists);//コマンドアロケータを実行しやがれ
 
