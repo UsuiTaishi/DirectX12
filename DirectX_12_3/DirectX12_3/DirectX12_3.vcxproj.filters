@@ -26,6 +26,7 @@
     <None Include="..\..\..\..\Erika\erika.fbx">
       <Filter>リソース ファイル</Filter>
     </None>
+    <None Include="BasicPixelShader.hlsli" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="VertexShader.hlsl">

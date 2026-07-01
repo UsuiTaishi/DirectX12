@@ -47,10 +47,10 @@ int WINAPI	WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 
 	Vertex vertices[] =
 	{
-		{{-1.0f, -1.0f, 0.0f},{-1.0f, -1.0f}},
-		{{-1.0f, 1.0f, 0.0f},{-1.0f, 1.0f}},
-		{{1.0f, -1.0f, 0.0f},{1.0f, -1.0f}},
-		{{1.0f, 1.0f, 0.0f}, {1.0f, 1.0f}},
+		{{-1.0f, -1.0f, 0.0f},{0.0f, 1.0f}},
+		{{-1.0f, 1.0f, 0.0f},{0.0f, 0.0f}},
+		{{1.0f, -1.0f, 0.0f},{1.0f, 1.0f}},
+		{{1.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
 	};
 
 	/*XMFLOAT3 vertices[] = {
@@ -64,6 +64,13 @@ int WINAPI	WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 		0,1,2,
 		2,1,3
 	};
+
+	struct TexRGBA
+	{
+		unsigned char R, G, B, A;
+	};
+
+	vector texturedata(256 * 256);
 
 	IDXGIFactory6* _dxgiFactory = nullptr; //グラボを探したり、画面の管理をしたりする大元の窓口
 	ID3D12Device* _dev = nullptr;//アダプターを選択したのちにグラボの中に作られる。コマンドアロケーターとかテクスチャバッファなどが必要としてる分を切り出す働き

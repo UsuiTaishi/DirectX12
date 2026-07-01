@@ -130,6 +130,7 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="..\..\..\..\Erika\erika.fbx" />
+    <None Include="BasicPixelShader.hlsli" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="PixelShader.hlsl">
