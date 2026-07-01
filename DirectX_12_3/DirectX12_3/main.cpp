@@ -65,12 +65,21 @@ int WINAPI	WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 		2,1,3
 	};
 
+	//こっから仮テクスチャ
 	struct TexRGBA
 	{
 		unsigned char R, G, B, A;
 	};
 
-	vector texturedata(256 * 256);
+	vector<TexRGBA> texturedata(256 * 256);
+
+	for (auto& rgba : texturedata)//texturedataの中のデータ一つに仮でrgbaという名前を付けて回す
+	{
+		rgba.R = rand() % 255;
+		rgba.G = rand() % 255;
+		rgba.B = rand() % 255;
+		rgba.A = rand() % 255;
+	};
 
 	IDXGIFactory6* _dxgiFactory = nullptr; //グラボを探したり、画面の管理をしたりする大元の窓口
 	ID3D12Device* _dev = nullptr;//アダプターを選択したのちにグラボの中に作られる。コマンドアロケーターとかテクスチャバッファなどが必要としてる分を切り出す働き
@@ -82,6 +91,7 @@ int WINAPI	WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 	ID3D12Fence* _fence = nullptr;
 	ID3D12Resource* vertBuff = nullptr;//りそーすを作って保存するとこ
 	ID3D12Resource* indexBuff = nullptr;
+	ID3D12Resource* texBuff = nullptr;
 	ID3D12PipelineState* mainPS = nullptr;
 	ID3D12RootSignature* rootSignature = nullptr;
 	
@@ -298,16 +308,16 @@ Flags
 
 	//レンダーターゲットビュー（RTV）は、ディスクリプター（記述子）の一種です。
 	//なぜ「Resource」と「Descriptor」を分けるの？A.元データ（Resource）は1つの使い回しですが、「どう使うか（Descriptor）」によって、いくらでも役割を変えられるように、DX12ではあえて別々に分離しているのです。どう使うかの解釈方法は意外にも少なく４つだけ
-
+	//ビュー＝ディスクリプターのこと。ディスクリプターは「どう使うかの解釈方法」なので、同じ元データでも、ディスクリプターを変えることで、用途を変えられる。例えば、テクスチャを「レンダーターゲットビュー」として使うか、「シェーダーリソースビュー」として使うかで、同じテクスチャでも用途が変わる。
 	//_backbufferにバックバッファーが入る。for文で回すたびに配列にぶち込まれていくぅ
 
 
 	//こっから頂点データをGPUに送って解釈してもらうためのゾーン？
 	D3D12_HEAP_PROPERTIES heapProperties = //ヒープ設定構造体を設定
 	{
-		D3D12_HEAP_TYPE_UPLOAD,
-		D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
-		D3D12_MEMORY_POOL_UNKNOWN,
+		D3D12_HEAP_TYPE_UPLOAD,//CPUとのアクセスどうする？つなげないなら爆速帯域幅になるけど
+		D3D12_CPU_PAGE_PROPERTY_UNKNOWN,//上の設定がカスタムなら使うやつ　UNKNOWNだと自動で適切なやつが選らばあれる
+		D3D12_MEMORY_POOL_UNKNOWN,//RAMかVRAMどっちに置く？上の設定がカスタムなら使うやつ　カスタムは自動割り当てじゃないものを使いたいときに使う
 		0,
 		0,
 	};
@@ -377,6 +387,10 @@ Flags
 	ibView.Format = DXGI_FORMAT_R16_UINT;
 	ibView.SizeInBytes = sizeof(indices);
 
+	//こっからテクスチャバッファー作っていく
+
+
+
 	//こっからシェーダーを読み込むための準備
 	ID3DBlob* _vsBlob = nullptr;
 	ID3DBlob* _psBlob = nullptr;
@@ -406,12 +420,23 @@ Flags
 		&errorBlob
 	);
 	//シェーダをコンパイル
-
+	/*
+	ゲーム起動 
+  ↓
+シェーダーファイルを読み込む
+  ↓
+コンパイル関数を呼ぶ（D3DCompile など）★ここ！
+  ↓
+パイプライン状態（PSO）を作る
+  ↓
+ゲーム本編（メインループ開始）
+	*/
 	D3D12_INPUT_ELEMENT_DESC inputLayout[] = {
 		{ "POSITION",0,DXGI_FORMAT_R32G32B32_FLOAT,0,D3D12_APPEND_ALIGNED_ELEMENT,D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,0 },
 		{"TEXCOORD", 0,DXGI_FORMAT_R32G32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT,D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,0 }
 	};
 
+	//こっからパイプラインステートオブジェクトを作るための準備
 	D3D12_GRAPHICS_PIPELINE_STATE_DESC gpipeline = {};
 	gpipeline.pRootSignature = nullptr;
 	gpipeline.VS.pShaderBytecode = _vsBlob->GetBufferPointer();
