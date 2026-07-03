@@ -4,6 +4,7 @@
 #include <dxgi1_6.h>
 #include <vector>
 #include <d3dcompiler.h>
+#include<DirectXTex.h>
 
 #include "window.h" 
 
@@ -14,6 +15,7 @@
 #pragma comment(lib,"d3d12.lib")
 #pragma comment(lib,"dxgi.lib")
 #pragma comment(lib,"d3dcompiler.lib")
+#pragma comment(lib,"DirectXTex.lib")
 
 using namespace std;
 
@@ -42,7 +44,9 @@ int WINAPI	WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 	const int window_width = 800;
 	const int window_height = 600;
 	HWND hwnd = CreateGameWindow(hInstance, window_width, window_height, _T("DX12 単純ポリゴンテスト"));
-	
+
+	HRESULT result;
+
 	//こっから初期化
 
 	Vertex vertices[] =
@@ -66,12 +70,12 @@ int WINAPI	WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 	};
 
 	//こっから仮テクスチャ
-	struct TexRGBA
+	/*struct TexRGBA
 	{
 		unsigned char R, G, B, A;
 	};
 
-	vector<TexRGBA> texturedata(256 * 256);
+	vector<TexRGBA> texturedata(256 * 256);//生データ
 
 	for (auto& rgba : texturedata)//texturedataの中のデータ一つに仮でrgbaという名前を付けて回す
 	{
@@ -80,6 +84,24 @@ int WINAPI	WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 		rgba.B = rand() % 255;
 		rgba.A = rand() % 255;
 	};
+	*/
+
+	//こっから本テクスチャ
+	TexMetadata metadata = {};//テクスチャリソースの仕様書、Image構造体はテクスチャリソースのサブリソースの仕様書//基本的にまたデータにはミップマップとかしか入ってない。ラフネスマップとか使いたいならもう一つメタデータ構造体を作らないといけない。テクスチャに対する処理の仕方が同じで、画像サイズも一緒なら同じメタデータ構造体にぶち込める。
+	ScratchImage scratchImg = {};
+	
+	result = LoadFromWICFile
+	(
+		L"erika.png",//読み込みたい画像ファイルのパス
+		WIC_FLAGS_NONE, 
+		&metadata,//読み込んだ画像のメタデータ（解像度、フォーマット、画像の種類など）を格納するための構造体へのポインタです。
+		scratchImg,//読み込まれた実際のピクセルデータが格納される、DirectXTexのメインコンテナオブジェクト（参照渡し）です。
+		nullptr
+	);
+
+	auto img = scratchImg.GetImage(0, 0, 0);//読み込んだメタデータの中にあるサブリソースの情報を取得するための関数。引数はミップマップレベル、配列スライス、キューブマップの面のインデックスを指定する。
+	//得られる値はImg構造体のポインタ
+
 
 	IDXGIFactory6* _dxgiFactory = nullptr; //グラボを探したり、画面の管理をしたりする大元の窓口
 	ID3D12Device* _dev = nullptr;//アダプターを選択したのちにグラボの中に作られる。コマンドアロケーターとかテクスチャバッファなどが必要としてる分を切り出す働き
@@ -104,7 +126,6 @@ int WINAPI	WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 	};
 	//FEATURE_LEVELについて　https://learn.microsoft.com/en-us/windows/win32/api/d3dcommon/ne-d3dcommon-d3d_feature_level
 
-	HRESULT result;
 	result = CreateDXGIFactory2(DXGI_CREATE_FACTORY_DEBUG, IID_PPV_ARGS(&_dxgiFactory));
 #ifdef _DEBUG
 	cout << "\n" << result << "\n";
@@ -398,16 +419,16 @@ Flags
 	texHeapProperties.CreationNodeMask = 0;
 	texHeapProperties.VisibleNodeMask = 0;
 
-	//リソース設定
+	//テクスチャリソース設定
 	D3D12_RESOURCE_DESC texResource = {};
 	texResource.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-	texResource.Width = 256;
-	texResource.Height = 256;
-	texResource.DepthOrArraySize = 1;
+	texResource.Width = metadata.width;
+	texResource.Height = metadata.height;
+	texResource.DepthOrArraySize = metadata.arraySize;//アニメーションのついたものだとこの値が増える。今回は1枚のテクスチャなので1
 	texResource.SampleDesc.Count = 1;
 	texResource.SampleDesc.Quality = 0;
-	texResource.MipLevels = 1;
-	texResource.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+	texResource.MipLevels = metadata.mipLevels;
+	texResource.Dimension = static_cast<D3D12_RESOURCE_DIMENSION>(metadata.dimension);
 	texResource.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
 	texResource.Flags = D3D12_RESOURCE_FLAG_NONE;
 
@@ -427,9 +448,15 @@ Flags
 	(
 		0,
 		nullptr,
+		img->pixels,
+		img->rowPitch,
+		img->slicePitch
+		/*0,
+		nullptr,
 		texturedata.data(),
 		sizeof(TexRGBA) * 256,
 		sizeof(TexRGBA) * texturedata.size()
+		*/
 	);
 
 	//ディスクリプターヒープを作る
@@ -572,6 +599,7 @@ Flags
 	samplerDesc.MaxLOD = D3D12_FLOAT32_MAX;
 	samplerDesc.MinLOD = 0.0f;
 	samplerDesc.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+	samplerDesc.ShaderRegister = 0;
 
 	D3D12_DESCRIPTOR_RANGE descriptorRange = {};
 	descriptorRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV; // シェーダーリソースビュー
