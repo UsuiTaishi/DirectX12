@@ -389,7 +389,77 @@ Flags
 
 	//こっからテクスチャバッファー作っていく
 
+	D3D12_HEAP_PROPERTIES texHeapProperties = {};//メモリの種類を決める構造体
 
+	//テクスチャは普通GPUに置くのでD3D12_HEAP_TYPE_DEFAULTを使うことが多いが、今回はCPUから直接書き込むのでD3D12_HEAP_TYPE_CUSTOMを使う
+	texHeapProperties.Type = D3D12_HEAP_TYPE_CUSTOM;
+	texHeapProperties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_WRITE_BACK;
+	texHeapProperties.MemoryPoolPreference = D3D12_MEMORY_POOL_L0;
+	texHeapProperties.CreationNodeMask = 0;
+	texHeapProperties.VisibleNodeMask = 0;
+
+	//リソース設定
+	D3D12_RESOURCE_DESC texResource = {};
+	texResource.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	texResource.Width = 256;
+	texResource.Height = 256;
+	texResource.DepthOrArraySize = 1;
+	texResource.SampleDesc.Count = 1;
+	texResource.SampleDesc.Quality = 0;
+	texResource.MipLevels = 1;
+	texResource.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+	texResource.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+	texResource.Flags = D3D12_RESOURCE_FLAG_NONE;
+
+	result = _dev->CreateCommittedResource(
+		&texHeapProperties,
+		D3D12_HEAP_FLAG_NONE,
+		&texResource,
+		D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+		nullptr,
+		IID_PPV_ARGS(&texBuff)
+	);
+#ifdef _DEBUG
+	cout << result << "\n";
+#endif
+
+	result = texBuff->WriteToSubresource
+	(
+		0,
+		nullptr,
+		texturedata.data(),
+		sizeof(TexRGBA) * 256,
+		sizeof(TexRGBA) * texturedata.size()
+	);
+
+	//ディスクリプターヒープを作る
+
+	ID3D12DescriptorHeap* texDescriptorHeap = nullptr;
+	D3D12_DESCRIPTOR_HEAP_DESC texDescriptorHeapDesc = {};
+	texDescriptorHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+	texDescriptorHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+	texDescriptorHeapDesc.NodeMask = 0;
+	texDescriptorHeapDesc.NumDescriptors = 1;
+	result = _dev->CreateDescriptorHeap(&texDescriptorHeapDesc, IID_PPV_ARGS(&texDescriptorHeap));
+
+	//ヒープに入れるディスクリプタの設定をする
+	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+	srvDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+	srvDesc.Texture2D.MipLevels = 1;
+
+	_dev->CreateShaderResourceView(texBuff, &srvDesc, texDescriptorHeap->GetCPUDescriptorHandleForHeapStart());//ここでディスクリプターとバッファーを結びつける
+
+	//ディスクリプタテーブルを作る
+	/*
+	ディスクリプタテーブルについて
+	ディスクリプタヒープのどこからどこまでが「このシェーダーで使うディスクリプタの範囲ですよ」と指定するのがディスクリプタテーブルです。ディスクリプタテーブルを作ることで、シェーダーは「この範囲のディスクリプタを使ってね」と理解できるようになります。
+	*/
+
+#ifdef _DEBUG
+	cout << result << "\n";
+#endif
 
 	//こっからシェーダーを読み込むための準備
 	ID3DBlob* _vsBlob = nullptr;
@@ -492,17 +562,46 @@ Flags
 	gpipeline.SampleDesc.Count = 1;//サンプリングは1ピクセルにつき１
 	gpipeline.SampleDesc.Quality = 0;//クオリティは最低
 
-	ID3D12RootSignature* rootsignature = nullptr;
+	D3D12_STATIC_SAMPLER_DESC samplerDesc = {};
+	samplerDesc.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+	samplerDesc.AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+	samplerDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+	samplerDesc.BorderColor = D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK;
+	samplerDesc.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
+	samplerDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+	samplerDesc.MaxLOD = D3D12_FLOAT32_MAX;
+	samplerDesc.MinLOD = 0.0f;
+	samplerDesc.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+
+	D3D12_DESCRIPTOR_RANGE descriptorRange = {};
+	descriptorRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV; // シェーダーリソースビュー
+	descriptorRange.NumDescriptors = 1; // ディスクリプタの数
+	descriptorRange.BaseShaderRegister = 0; // シェーダーレジスタのベース
+	descriptorRange.RegisterSpace = 0; // レジスタスペース
+	descriptorRange.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND; // ディスクリプタテーブルの先頭からのオフセット
+
+	D3D12_ROOT_DESCRIPTOR_TABLE descriptorTable = {};
+	descriptorTable.NumDescriptorRanges = 1;
+	descriptorTable.pDescriptorRanges = &descriptorRange;
+
+	D3D12_ROOT_PARAMETER rootParameter = {};
+	rootParameter.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+	rootParameter.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL; //ピクセルシェーダーからアクセスできる
+	rootParameter.DescriptorTable = descriptorTable;
 
 	D3D12_ROOT_SIGNATURE_DESC rootSignatureDesc = {};
 	rootSignatureDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
+	rootSignatureDesc.pParameters = &rootParameter;
+	rootSignatureDesc.NumParameters = 1;
+	rootSignatureDesc.pStaticSamplers = &samplerDesc;
+	rootSignatureDesc.NumStaticSamplers = 1;
 
 	ID3DBlob* rootSigBlob = nullptr;
 	result = D3D12SerializeRootSignature(&rootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1_0, &rootSigBlob, &errorBlob);
-	result = _dev->CreateRootSignature(0, rootSigBlob->GetBufferPointer(), rootSigBlob->GetBufferSize(), IID_PPV_ARGS(&rootsignature));
+	result = _dev->CreateRootSignature(0, rootSigBlob->GetBufferPointer(), rootSigBlob->GetBufferSize(), IID_PPV_ARGS(&rootSignature));
 	rootSigBlob->Release();
 
-	gpipeline.pRootSignature = rootsignature;
+	gpipeline.pRootSignature = rootSignature;
 	ID3D12PipelineState* _pipelinestate = nullptr;
 	result = _dev->CreateGraphicsPipelineState(&gpipeline, IID_PPV_ARGS(&_pipelinestate));
 
@@ -567,7 +666,9 @@ Flags
 		_cmdList->SetPipelineState(_pipelinestate);
 		_cmdList->RSSetViewports(1, &viewport);
 		_cmdList->RSSetScissorRects(1, &scissorrect);
-		_cmdList->SetGraphicsRootSignature(rootsignature);
+		_cmdList->SetGraphicsRootSignature(rootSignature);
+		_cmdList->SetDescriptorHeaps(1, &texDescriptorHeap);
+		_cmdList->SetGraphicsRootDescriptorTable(0, texDescriptorHeap->GetGPUDescriptorHandleForHeapStart());
 
 		_cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
 		_cmdList->IASetVertexBuffers(0, 1, &vbView);
@@ -606,4 +707,4 @@ Flags
 	}
 }
 
-//
+//nullptrで今はない変数をないものとして扱っている
