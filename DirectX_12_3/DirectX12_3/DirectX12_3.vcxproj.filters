@@ -42,7 +42,7 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <Image Include="erika.png">
+    <Image Include="erika.jpg">
       <Filter>リソース ファイル</Filter>
     </Image>
   </ItemGroup>

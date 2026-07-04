@@ -29,10 +29,34 @@ void DebugOutputFormatString(const char* format, ...)
 #endif // _DEBUG
 }
 
+void EnableDebugLayer() {
+	ID3D12Debug* debugLayer = nullptr;
+	if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&debugLayer)))) {
+		debugLayer->EnableDebugLayer();
+		debugLayer->Release();
+	}
+}
+
+/*
+#include <io.h>
+#include <iostream>
+#include <direct.h>
+
+void LogWorkingDirAndFile() {
+	char cwd[4096];
+	if (_getcwd(cwd, sizeof(cwd))) {
+		std::cout << "CWD: " << cwd << "\n";
+	}
+	int exists = _access("erika.jpg", 0);
+	std::cout << "erika.jpg exists? " << (exists == 0 ? "yes" : "no") << " (_access=" << exists << ")\n";
+}
+*/
+
 #ifdef _DEBUG
 int main()
 {
 	HINSTANCE hInstance = GetModuleHandle(nullptr);
+	CoInitializeEx(nullptr, COINIT_MULTITHREADED);
 #else
 int WINAPI	WinMain(HINSTANCE, HINSTANCE, LPSTR, int) 
     {
@@ -41,6 +65,7 @@ int WINAPI	WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 	    return 0;
     }
 #endif // _DEBUG
+
 	const int window_width = 800;
 	const int window_height = 600;
 	HWND hwnd = CreateGameWindow(hInstance, window_width, window_height, _T("DX12 単純ポリゴンテスト"));
@@ -90,14 +115,35 @@ int WINAPI	WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 	TexMetadata metadata = {};//テクスチャリソースの仕様書、Image構造体はテクスチャリソースのサブリソースの仕様書//基本的にまたデータにはミップマップとかしか入ってない。ラフネスマップとか使いたいならもう一つメタデータ構造体を作らないといけない。テクスチャに対する処理の仕方が同じで、画像サイズも一緒なら同じメタデータ構造体にぶち込める。
 	ScratchImage scratchImg = {};
 	
+	/*
+	LogWorkingDirAndFile();
+
+	HRESULT hr = LoadFromWICFile(
+		L"erika.jpg",
+		WIC_FLAGS_NONE,
+		&metadata,
+		scratchImg,
+		nullptr
+	);
+	if (FAILED(hr)) {
+		std::cout << "LoadFromWICFile failed: 0x" << std::hex << hr << "\n";
+		LogWorkingDirAndFile(); // 追加ログ（原因追跡用）
+		// ここで早期リターンまたはフォールバック処理
+	}
+	*/
+
 	result = LoadFromWICFile
 	(
-		L"erika.png",//読み込みたい画像ファイルのパス
+		L"erika.jpg",//読み込みたい画像ファイルのパス
 		WIC_FLAGS_NONE, 
 		&metadata,//読み込んだ画像のメタデータ（解像度、フォーマット、画像の種類など）を格納するための構造体へのポインタです。
 		scratchImg,//読み込まれた実際のピクセルデータが格納される、DirectXTexのメインコンテナオブジェクト（参照渡し）です。
 		nullptr
 	);
+
+#ifdef _DEBUG
+	cout << "\n" << result << "\n";
+#endif
 
 	auto img = scratchImg.GetImage(0, 0, 0);//読み込んだメタデータの中にあるサブリソースの情報を取得するための関数。引数はミップマップレベル、配列スライス、キューブマップの面のインデックスを指定する。
 	//得られる値はImg構造体のポインタ
