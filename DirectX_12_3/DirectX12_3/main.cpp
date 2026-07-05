@@ -68,6 +68,7 @@ int WINAPI	WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 
 	const int window_width = 800;
 	const int window_height = 600;
+	const float aspect = float(window_height) / float(window_width);
 	HWND hwnd = CreateGameWindow(hInstance, window_width, window_height, _T("DX12 単純ポリゴンテスト"));
 
 	HRESULT result;
@@ -76,10 +77,10 @@ int WINAPI	WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 
 	Vertex vertices[] =
 	{
-		{{-1.0f, -1.0f, 0.0f},{0.0f, 1.0f}},
-		{{-1.0f, 1.0f, 0.0f},{0.0f, 0.0f}},
-		{{1.0f, -1.0f, 0.0f},{1.0f, 1.0f}},
-		{{1.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
+		{{-1.0*aspect, -1.0f, 0.0f},{0.0f, 1.0f}},
+		{{-1.0*aspect, 1.0f, 0.0f},{0.0f, 0.0f}},
+		{{1.0*aspect, -1.0f, 0.0f},{1.0f, 1.0f}},
+		{{1.0*aspect, 1.0f, 0.0f}, {1.0f, 0.0f}},
 	};
 
 	/*XMFLOAT3 vertices[] = {
@@ -143,6 +144,7 @@ int WINAPI	WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 
 #ifdef _DEBUG
 	cout << "\n" << result << "\n";
+	cout << "\n" << metadata.format << "\n";
 #endif
 
 	auto img = scratchImg.GetImage(0, 0, 0);//読み込んだメタデータの中にあるサブリソースの情報を取得するための関数。引数はミップマップレベル、配列スライス、キューブマップの面のインデックスを指定する。
@@ -365,6 +367,13 @@ Flags
 
 	D3D12_CPU_DESCRIPTOR_HANDLE handle = _descriptorHeap->GetCPUDescriptorHandleForHeapStart();//ヒープの「先頭の住所」を handle に入れる（例：ptr = 0x1000）HANDLEはディスクリプターヒープにあるディスクリプターの境目の位置のことです。
 	//スワップチェーン上のバックバッファをディスクリプタに渡してるってこと？
+
+	/*	ガンマ補正
+	D3D12_RENDER_TARGET_VIEW_DESC rtvDesc = {};
+	rtvDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+	rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
+	*/
+
 	vector<ID3D12Resource*> _backbuffers(swapChainDesc.BufferCount);//ID3D12Resourceはテクスチャも、ポリゴンの頂点データ、行列のパラメータなど設定によって異なるデータに変わる。可変長配列の数は（）で指定できる
 	for (UINT index = 0; index < swapChainDesc.BufferCount; ++index)
 	{
@@ -467,7 +476,7 @@ Flags
 
 	//テクスチャリソース設定
 	D3D12_RESOURCE_DESC texResource = {};
-	texResource.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	texResource.Format = metadata.format;
 	texResource.Width = metadata.width;
 	texResource.Height = metadata.height;
 	texResource.DepthOrArraySize = metadata.arraySize;//アニメーションのついたものだとこの値が増える。今回は1枚のテクスチャなので1
@@ -517,7 +526,7 @@ Flags
 
 	//ヒープに入れるディスクリプタの設定をする
 	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-	srvDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	srvDesc.Format = metadata.format;
 	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
 	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
 	srvDesc.Texture2D.MipLevels = 1;
