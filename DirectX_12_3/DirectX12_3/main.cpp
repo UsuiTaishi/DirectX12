@@ -391,7 +391,7 @@ Flags
 	//こっから頂点データをGPUに送って解釈してもらうためのゾーン？
 	D3D12_HEAP_PROPERTIES heapProperties = //ヒープ設定構造体を設定
 	{
-		D3D12_HEAP_TYPE_UPLOAD,//CPUとのアクセスどうする？つなげないなら爆速帯域幅になるけど
+		D3D12_HEAP_TYPE_UPLOAD,//CPUとのアクセスどうする？つなげないなら爆速帯域幅になるけど。地産地消するリソースはデフォルトにするといい？
 		D3D12_CPU_PAGE_PROPERTY_UNKNOWN,//上の設定がカスタムなら使うやつ　UNKNOWNだと自動で適切なやつが選らばあれる
 		D3D12_MEMORY_POOL_UNKNOWN,//RAMかVRAMどっちに置く？上の設定がカスタムなら使うやつ　カスタムは自動割り当てじゃないものを使いたいときに使う
 		0,
@@ -424,9 +424,7 @@ Flags
 	Vertex* vertMap = nullptr;//ポインターを受け取り保存するため
 
 	vertBuff->Map(0, nullptr, (void**)&vertMap);//先ほど用意した vertMap にGPUメモリへ繋がる住所が格納されます。これにより、CPUから直接GPUのメモリへデータを書き込める状態になります。
-
 	std::copy(begin(vertices), end(vertices), vertMap);//何をしているか: std::copy を使って、CPU側のメモリにある頂点配列（vertices）の中身を、先ほど取得したGPU側の住所（vertMap）へごっそりコピーしています。一応ここで頂点バッファが完成
-
 	vertBuff->Unmap(0, nullptr);
 
 
