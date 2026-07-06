@@ -162,6 +162,18 @@ HRESULT DX12App::Init(HWND hWnd, int width, int height)
 	DXGI_SWAP_CHAIN_DESC1 m_swapChainDesc = {};
 	m_swapChainDesc.Width = width;
 	m_swapChainDesc.Height = height;
+	m_swapChainDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	m_swapChainDesc.Stereo = FALSE;
+	DXGI_SAMPLE_DESC sampleDesc = {};
+	sampleDesc.Count = 1;
+	sampleDesc.Quality = 0;
+	m_swapChainDesc.SampleDesc = sampleDesc;
+	m_swapChainDesc.BufferUsage = DXGI_USAGE_BACK_BUFFER;
+	m_swapChainDesc.BufferCount = BACK_BUFFER_COUNT;
+	m_swapChainDesc.Scaling = DXGI_SCALING_STRETCH;
+	m_swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
+	m_swapChainDesc.AlphaMode = DXGI_ALPHA_MODE_IGNORE;
+	m_swapChainDesc.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
 	IDXGISwapChain1* sc1 = nullptr;
 	result = m_dxgiFactory->CreateSwapChainForHwnd(m_cmdQueue, hWnd, &m_swapChainDesc, nullptr, nullptr, &sc1);
 #ifdef _DEBUG
@@ -170,17 +182,27 @@ HRESULT DX12App::Init(HWND hWnd, int width, int height)
 	result = sc1->QueryInterface(IID_PPV_ARGS(&m_swapChain));//格納するアドレスをクラスのメンバ変数のものにするよ
 	sc1->Release();
 
-	//バックバッファー用のディスクリプタヒープを作る
+	//バックバッファー用のレンダーターゲットビューのディスクリプタヒープを作る
 	D3D12_DESCRIPTOR_HEAP_DESC _rtvHeapDesc = {};
 	_rtvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
-	_rtvHeapDesc.NumDescriptors = 2;
+	_rtvHeapDesc.NumDescriptors = BACK_BUFFER_COUNT;//表裏のレンダーターゲットビュー用のメモリを確保
 	_rtvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
 	_rtvHeapDesc.NodeMask = 0;
-
 	result = m_dev->CreateDescriptorHeap(&_rtvHeapDesc, IID_PPV_ARGS(&m_rtvHeap));
 #ifdef _DEBUG
 	CheckResult(result, "CreateDescriptorHeap");
 #endif
+	//ディスクリプタとスワップチェーン上のバックバッファを紐づけ
+	D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = m_rtvHeap->GetCPUDescriptorHandleForHeapStart();//ディスクリプタを入れるヒープの先頭アドレスを取得する。
+	for (UINT i = 0; i < BACK_BUFFER_COUNT; ++i)
+	{
+		result = m_swapChain->GetBuffer(i, IID_PPV_ARGS(&m_rtvResources[i]));
+#ifdef _DEBUG
+		CheckResult(result, "SwapChain->GetBuffer");
+#endif
+		m_dev->CreateRenderTargetView(m_rtvResources[i], nullptr, rtvHandle);// 取り出したバッファを、RTVとしてメモリに登録
+		rtvHandle.ptr += m_dev->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);//次のバッファここでいう２枚目のバックバッファのために次の保存開始位置を指定する
+	}
 	//フェンスを作る
 	UINT fenceVal = 0;
 	result = m_dev->CreateFence(fenceVal, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&m_fence));//fenceはCPUがGPUに送ったコマンドキュー　フェンスの値はGPUが終えた処理のフレーム番号
@@ -188,4 +210,58 @@ HRESULT DX12App::Init(HWND hWnd, int width, int height)
 	CheckResult(result, "CreateFence");
 #endif
 	return S_OK;
+}
+
+HRESULT DX12App::InitPipeline()
+{
+
+}
+
+void DX12App::Render()
+{
+	HRESULT result;
+	
+	UINT backBufferIndex = m_swapChain->GetCurrentBackBufferIndex();//今描画しようとしてるバックバッファーの識別番号は？
+
+	m_cmdAllocators[backBufferIndex]->Reset();//コマンドアロケータをリセット
+	m_cmdList->Reset(m_cmdAllocators[backBufferIndex], nullptr);//コマンドリストをリセット
+
+	D3D12_RESOURCE_BARRIER barrier = {};
+	barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+	barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+	barrier.Transition.pResource = m_rtvResources[backBufferIndex];
+	barrier.Transition.Subresource = 0;
+	barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT;
+	barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
+	barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+	m_cmdList->ResourceBarrier(1, &barrier);//ここまではリソースは読み込み用でこの後からは書き込み(我々が想像する描画処理)！読み込み前に描きこんでオブジェクトが表示されないなんてことを防ぐため
+
+	D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = m_rtvHeap->GetCPUDescriptorHandleForHeapStart();//表裏でループを回すために毎ループリセットする。
+	rtvHandle.ptr += backBufferIndex * m_dev->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);;//表裏どっちのバックバッファ持ってくるか計算している。
+
+	m_cmdList->OMSetRenderTargets(1, &rtvHandle, FALSE, nullptr);
+
+	float clearColor[] = { 0.4f, 0.6f, 0.9f, 1.0f };
+	m_cmdList->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
+
+	barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+	barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
+	m_cmdList->ResourceBarrier(1, &barrier);//ここまではリソースは書き込み用だったがここからは読み込み用
+
+	m_cmdList->Close();
+
+	ID3D12CommandList* cmdLists[] = { m_cmdList };
+	m_cmdQueue->ExecuteCommandLists(1, cmdLists);
+
+	m_swapChain->Present(1, 0);
+
+	m_fenceVal++;
+	m_cmdQueue->Signal(m_fence, m_fenceVal);
+	if (m_fence->GetCompletedValue() < m_fenceVal)//こっからの処理はCPUの待ち時間をつぶすための処理、GetCompletedValueはGPUが今、処理しているフレーム数と思ってもらえれば、今回の場合は
+	{
+		HANDLE eventHandle = CreateEventEx(nullptr, nullptr, false, EVENT_ALL_ACCESS);
+		m_fence->SetEventOnCompletion(m_fenceVal, eventHandle);
+		WaitForSingleObject(eventHandle, INFINITE);//特定の条件（シグナル）が満たされるか、指定した時間が経過するまで、プログラムの処理を一時停止して待つ
+		CloseHandle(eventHandle);
+	}
 }
