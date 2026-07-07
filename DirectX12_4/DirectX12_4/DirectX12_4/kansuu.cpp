@@ -214,7 +214,104 @@ HRESULT DX12App::Init(HWND hWnd, int width, int height)
 
 HRESULT DX12App::InitPipeline()
 {
+	//パイプラインステートを設定する。
+	HRESULT result;
 
+	ID3DBlob* _vsBlob = nullptr;
+	ID3DBlob* _psBlob = nullptr;
+	ID3DBlob* errorBlob = nullptr;
+
+	result = D3DCompileFromFile(
+		L"VertexShader.hlsl",
+		nullptr,
+		D3D_COMPILE_STANDARD_FILE_INCLUDE,
+		"vsMain",
+		"vs_5_0",
+		D3DCOMPILE_DEBUG,
+		0,
+		&_vsBlob,
+		&errorBlob
+	);
+#ifdef _DEBUG
+	CheckResult(result, "CompileVertexShader");
+#endif
+
+	result = D3DCompileFromFile(
+		L"PixelShader.hlsl",
+		nullptr,
+		D3D_COMPILE_STANDARD_FILE_INCLUDE,
+		"psMain",
+		"ps_5_0",
+		D3DCOMPILE_DEBUG,
+		0,
+		&_psBlob,
+		&errorBlob
+	);
+#ifdef _DEBUG
+	CheckResult(result, "CompileVertexShader");
+#endif
+	D3D12_INPUT_ELEMENT_DESC inputElementDescs[] =
+	{
+		{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+		{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
+	};
+
+	D3D12_ROOT_SIGNATURE_DESC rootSigDesc = {};
+	rootSigDesc.NumParameters = 0;
+	rootSigDesc.pParameters = nullptr;
+	rootSigDesc.NumStaticSamplers = 0;
+	rootSigDesc.pStaticSamplers = nullptr;
+	rootSigDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
+
+	ID3DBlob* serializedRootSig = nullptr;
+	result = D3D12SerializeRootSignature(&rootSigDesc, D3D_ROOT_SIGNATURE_VERSION_1, &serializedRootSig, &errorBlob);
+#ifdef _DEBUG
+	CheckResult(result, "SerializeRootSignature");
+#endif
+	result = m_dev->CreateRootSignature(0, serializedRootSig->GetBufferPointer(), serializedRootSig->GetBufferSize(), IID_PPV_ARGS(&m_rootSignature));
+	serializedRootSig->Release();
+#ifdef _DEBUG
+	CheckResult(result, "CreateRootSignature");
+#endif
+
+	D3D12_GRAPHICS_PIPELINE_STATE_DESC m_gps = {};
+	m_gps.pRootSignature = m_rootSignature;
+	m_gps.VS = { _vsBlob->GetBufferPointer(), _vsBlob->GetBufferSize() };
+	m_gps.PS = { _psBlob->GetBufferPointer(), _psBlob->GetBufferSize() };
+
+	D3D12_RASTERIZER_DESC m_gpsRasterrizerDesc = {};
+	m_gpsRasterrizerDesc.CullMode = D3D12_CULL_MODE_BACK;
+	m_gpsRasterrizerDesc.FillMode = D3D12_FILL_MODE_SOLID;
+	m_gps.RasterizerState = m_gpsRasterrizerDesc;
+
+	D3D12_BLEND_DESC m_gpsBlendDesc = {};
+	m_gpsBlendDesc.AlphaToCoverageEnable = false;
+	m_gpsBlendDesc.IndependentBlendEnable = false;
+	D3D12_RENDER_TARGET_BLEND_DESC m_rtBlendDesc;
+	m_rtBlendDesc.BlendEnable = false;
+	m_rtBlendDesc.LogicOpEnable = false;
+	m_rtBlendDesc.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+	m_gpsBlendDesc.RenderTarget[0] = m_rtBlendDesc;
+
+	m_gps.BlendState.RenderTarget->RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+
+	m_gps.InputLayout = { inputElementDescs, _countof(inputElementDescs) };
+	m_gps.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+
+	m_gps.NumRenderTargets = 1;
+	m_gps.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM; // スワップチェーンと一致させる
+	
+	m_gps.SampleMask = D3D12_DEFAULT_SAMPLE_MASK;
+	m_gps.SampleDesc.Count = 1;
+
+	result = m_dev->CreateGraphicsPipelineState(&m_gps, IID_PPV_ARGS(&m_pipelineState));
+#ifdef _DEBUG
+	CheckResult(result, "CreateGraphicsPipelineState");
+#endif
+	_vsBlob->Release();
+	_psBlob->Release();
+
+	return S_OK;
 }
 
 void DX12App::Render()

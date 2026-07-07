@@ -30,6 +30,7 @@ int WINAPI	WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 	DX12App app;
 
 	app.Init(hwnd, window_width, window_height);
+	app.InitPipeline();
 
 	ShowWindow(hwnd, SW_SHOW);
 
