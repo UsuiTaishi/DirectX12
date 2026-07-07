@@ -22,6 +22,10 @@ using namespace DirectX;
 
 int WINAPI	WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 {
+#ifdef DEBUG
+	void EnableDebugLayer();
+#endif // DEBUG
+
 	HINSTANCE hInstance = GetModuleHandle(nullptr);
 	const int window_width = 800;
 	const int window_height = 600;
@@ -34,12 +38,12 @@ int WINAPI	WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 
 	ShowWindow(hwnd, SW_SHOW);
 
-	MSG msg = {};
+	MSG msg = { 0 };
 	while (msg.message != WM_QUIT)
 	{
+
 		if (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE))
 		{
-			TranslateMessage(&msg);
 			DispatchMessage(&msg);
 		}
 		else
@@ -47,6 +51,6 @@ int WINAPI	WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 			app.Render();
 		}
 	}
-
+	//app.Release();
 	return (int)msg.wParam;
 }

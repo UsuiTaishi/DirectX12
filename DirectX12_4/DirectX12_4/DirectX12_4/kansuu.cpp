@@ -65,9 +65,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
 
 HWND CreateGameWindow(HINSTANCE hInstance, int width, int height, const TCHAR* title) {
 	WNDCLASSEX w = {};
+	w.lpszClassName = _T("DirectXTest");
 	w.cbSize = sizeof(WNDCLASSEX);
 	w.lpfnWndProc = (WNDPROC)WndProc; // 同じファイル内にあるから使える
-	w.lpszClassName = _T("DirectXTest");
+	w.hCursor = LoadCursor(NULL, IDC_UPARROW);
 	w.hInstance = hInstance;
 	RegisterClassEx(&w);
 
@@ -142,7 +143,7 @@ HRESULT DX12App::Init(HWND hWnd, int width, int height)
 		CheckResult(result, "CreateCommandAllocator");
 #endif
 	}
-	result = m_dev->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, m_cmdAllocators[0], nullptr, IID_PPV_ARGS(&m_cmdList));
+	result = m_dev->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, m_cmdAllocators[0].Get(), nullptr, IID_PPV_ARGS(&m_cmdList));
 	m_cmdList->Close();
 #ifdef _DEBUG
 	CheckResult(result, "CreateCommandList");
@@ -175,7 +176,7 @@ HRESULT DX12App::Init(HWND hWnd, int width, int height)
 	m_swapChainDesc.AlphaMode = DXGI_ALPHA_MODE_IGNORE;
 	m_swapChainDesc.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
 	IDXGISwapChain1* sc1 = nullptr;
-	result = m_dxgiFactory->CreateSwapChainForHwnd(m_cmdQueue, hWnd, &m_swapChainDesc, nullptr, nullptr, &sc1);
+	result = m_dxgiFactory->CreateSwapChainForHwnd(m_cmdQueue.Get(), hWnd, &m_swapChainDesc, nullptr, nullptr, &sc1);
 #ifdef _DEBUG
 	CheckResult(result, "CreateSwapChainForHwnd");
 #endif
@@ -196,11 +197,11 @@ HRESULT DX12App::Init(HWND hWnd, int width, int height)
 	D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = m_rtvHeap->GetCPUDescriptorHandleForHeapStart();//ディスクリプタを入れるヒープの先頭アドレスを取得する。
 	for (UINT i = 0; i < BACK_BUFFER_COUNT; ++i)
 	{
-		result = m_swapChain->GetBuffer(i, IID_PPV_ARGS(&m_rtvResources[i]));
+		result = m_swapChain->GetBuffer(i, IID_PPV_ARGS(&m_buckbuffer[i]));
 #ifdef _DEBUG
 		CheckResult(result, "SwapChain->GetBuffer");
 #endif
-		m_dev->CreateRenderTargetView(m_rtvResources[i], nullptr, rtvHandle);// 取り出したバッファを、RTVとしてメモリに登録
+		m_dev->CreateRenderTargetView(m_buckbuffer[i].Get(), nullptr, rtvHandle);// 取り出したバッファを、RTVとしてメモリに登録
 		rtvHandle.ptr += m_dev->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);//次のバッファここでいう２枚目のバックバッファのために次の保存開始位置を指定する
 	}
 	//フェンスを作る
@@ -226,7 +227,7 @@ HRESULT DX12App::InitPipeline()
 		nullptr,
 		D3D_COMPILE_STANDARD_FILE_INCLUDE,
 		"vsMain",
-		"vs_5_0",
+		"vs_5_1",
 		D3DCOMPILE_DEBUG,
 		0,
 		&_vsBlob,
@@ -241,7 +242,7 @@ HRESULT DX12App::InitPipeline()
 		nullptr,
 		D3D_COMPILE_STANDARD_FILE_INCLUDE,
 		"psMain",
-		"ps_5_0",
+		"ps_5_1",
 		D3DCOMPILE_DEBUG,
 		0,
 		&_psBlob,
@@ -275,7 +276,7 @@ HRESULT DX12App::InitPipeline()
 #endif
 
 	D3D12_GRAPHICS_PIPELINE_STATE_DESC m_gps = {};
-	m_gps.pRootSignature = m_rootSignature;
+	m_gps.pRootSignature = m_rootSignature.Get();
 	m_gps.VS = { _vsBlob->GetBufferPointer(), _vsBlob->GetBufferSize() };
 	m_gps.PS = { _psBlob->GetBufferPointer(), _psBlob->GetBufferSize() };
 
@@ -321,12 +322,12 @@ void DX12App::Render()
 	UINT backBufferIndex = m_swapChain->GetCurrentBackBufferIndex();//今描画しようとしてるバックバッファーの識別番号は？
 
 	m_cmdAllocators[backBufferIndex]->Reset();//コマンドアロケータをリセット
-	m_cmdList->Reset(m_cmdAllocators[backBufferIndex], nullptr);//コマンドリストをリセット
+	m_cmdList->Reset(m_cmdAllocators[backBufferIndex].Get(), nullptr);//コマンドリストをリセット
 
 	D3D12_RESOURCE_BARRIER barrier = {};
 	barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
 	barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-	barrier.Transition.pResource = m_rtvResources[backBufferIndex];
+	barrier.Transition.pResource = m_buckbuffer[backBufferIndex].Get();
 	barrier.Transition.Subresource = 0;
 	barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT;
 	barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
@@ -347,13 +348,13 @@ void DX12App::Render()
 
 	m_cmdList->Close();
 
-	ID3D12CommandList* cmdLists[] = { m_cmdList };
+	ID3D12CommandList* cmdLists[] = { m_cmdList.Get() };
 	m_cmdQueue->ExecuteCommandLists(1, cmdLists);
 
 	m_swapChain->Present(1, 0);
 
 	m_fenceVal++;
-	m_cmdQueue->Signal(m_fence, m_fenceVal);
+	m_cmdQueue->Signal(m_fence.Get(), m_fenceVal);
 	if (m_fence->GetCompletedValue() < m_fenceVal)//こっからの処理はCPUの待ち時間をつぶすための処理、GetCompletedValueはGPUが今、処理しているフレーム数と思ってもらえれば、今回の場合は
 	{
 		HANDLE eventHandle = CreateEventEx(nullptr, nullptr, false, EVENT_ALL_ACCESS);
@@ -362,3 +363,25 @@ void DX12App::Render()
 		CloseHandle(eventHandle);
 	}
 }
+
+/*
+HRESULT DX12App::Release()
+{
+	m_fence->Release();
+		for (int i = BACK_BUFFER_COUNT - 1; i >= 0; i--)
+		{
+			m_rtvResources[i]->Release();
+		}
+	m_rtvHeap->Release();
+	m_swapChain->Release();
+	m_cmdQueue->Release();
+	m_cmdList->Release();
+	for (int i = BACK_BUFFER_COUNT - 1; i >= 0; i--)
+	{
+		m_cmdAllocators[i]->Release();
+	}
+	m_dev->Release();
+	m_dxgiFactory->Release();
+	return S_OK;
+}
+*/
