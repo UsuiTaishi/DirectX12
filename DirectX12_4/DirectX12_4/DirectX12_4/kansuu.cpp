@@ -191,7 +191,7 @@ HRESULT DX12App::Init(HWND hWnd, int width, int height)
 	_rtvHeapDesc.NodeMask = 0;
 	result = m_dev->CreateDescriptorHeap(&_rtvHeapDesc, IID_PPV_ARGS(&m_rtvHeap));
 #ifdef _DEBUG
-	CheckResult(result, "CreateDescriptorHeap");
+	CheckResult(result, "CreateRtvHeap");
 #endif
 	//ディスクリプタとスワップチェーン上のバックバッファを紐づけ
 	D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = m_rtvHeap->GetCPUDescriptorHandleForHeapStart();//ディスクリプタを入れるヒープの先頭アドレスを取得する。
@@ -201,9 +201,46 @@ HRESULT DX12App::Init(HWND hWnd, int width, int height)
 #ifdef _DEBUG
 		CheckResult(result, "SwapChain->GetBuffer");
 #endif
+	//ディスクリプタ（レンダーターゲットビュー）を作って入れる
 		m_dev->CreateRenderTargetView(m_buckbuffer[i].Get(), nullptr, rtvHandle);// 取り出したバッファを、RTVとしてメモリに登録
 		rtvHandle.ptr += m_dev->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);//次のバッファここでいう２枚目のバックバッファのために次の保存開始位置を指定する
 	}
+
+	//CBV、SRV,UAVのディスクリプタヒープを作る
+	D3D12_DESCRIPTOR_HEAP_DESC srvHeapDesc = {};
+	srvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+	srvHeapDesc.NumDescriptors = MAX_SRV_COUNT;
+	srvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE; // シェーダーから見えるようにする
+	srvHeapDesc.NodeMask = 0;
+	result = m_dev->CreateDescriptorHeap(&srvHeapDesc, IID_PPV_ARGS(&m_srvHeap));
+#ifdef _DEBUG
+	CheckResult(result, "CreateSrvHeap");
+#endif
+	//サンプラー用のディスクリプタヒープを作る
+	D3D12_DESCRIPTOR_HEAP_DESC smpHeapDesc = {};
+	smpHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER;
+	smpHeapDesc.NumDescriptors = 1;
+	smpHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+	smpHeapDesc.NodeMask = 0;
+	result = m_dev->CreateDescriptorHeap(&smpHeapDesc, IID_PPV_ARGS(&m_smpHeap));
+#ifdef _DEBUG
+	CheckResult(result, "CreateSmpHeap");
+#endif
+	//サンプラーを作る。サンプラーはディスクリプタ―の一種
+	D3D12_SAMPLER_DESC smpDesc = {};
+	smpDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+	smpDesc.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+	smpDesc.AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+	smpDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+	m_dev->CreateSampler(&smpDesc, m_smpHeap->GetCPUDescriptorHandleForHeapStart());
+
+	//深度ステンシル用のディスクリプタヒープを作る
+	D3D12_DESCRIPTOR_HEAP_DESC dsvHeapDesc = {};
+	dsvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
+	dsvHeapDesc.NumDescriptors = 1;
+	dsvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
+	dsvHeapDesc.NodeMask = 0;
+
 	//フェンスを作る
 	UINT fenceVal = 0;
 	result = m_dev->CreateFence(fenceVal, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&m_fence));//fenceはCPUがGPUに送ったコマンドキュー　フェンスの値はGPUが終えた処理のフレーム番号

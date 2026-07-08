@@ -28,6 +28,7 @@ private:
 	Microsoft::WRL::ComPtr<IDXGISwapChain4> m_swapChain = nullptr;
 	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_rtvHeap = nullptr;
 	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_srvHeap = nullptr;//ゲームプレイ中、新しい3Dモデル（FBX）や画像をロードするたびに、このヒープの「空いている場所」に新しいビュー（SRV）を書き込みます。テクスチャ、定数バッファ、マテリアルデータなど。
+	UINT MAX_SRV_COUNT = 4096;
 	UINT m_nextSrvIndex = 0;
 	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_smpHeap = nullptr;
 	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_dsvHeap = nullptr;
