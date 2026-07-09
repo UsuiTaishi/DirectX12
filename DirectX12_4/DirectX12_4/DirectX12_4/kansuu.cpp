@@ -9,12 +9,11 @@
 
 #ifdef _DEBUG
 #include <iostream>
-#endif //_DEBUG
+#endif
 
 #pragma comment(lib,"d3d12.lib")
 #pragma comment(lib,"dxgi.lib")
 #pragma comment(lib,"d3dcompiler.lib")
-//#pragma comment(lib,"DirectXTex.lib")
 
 using namespace std;
 
@@ -37,7 +36,7 @@ void CheckResult(HRESULT result, string process)
 	}
 	else
 	{
-		// 成功時
+		//成功
 		std::string log = "[SUCCESS] " + process + "\n";
 		OutputDebugStringA(log.c_str());
 	}
@@ -197,12 +196,12 @@ HRESULT DX12App::Init(HWND hWnd, int width, int height)
 	D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = m_rtvHeap->GetCPUDescriptorHandleForHeapStart();//ディスクリプタを入れるヒープの先頭アドレスを取得する。
 	for (UINT i = 0; i < BACK_BUFFER_COUNT; ++i)
 	{
-		result = m_swapChain->GetBuffer(i, IID_PPV_ARGS(&m_buckbuffer[i]));
+		result = m_swapChain->GetBuffer(i, IID_PPV_ARGS(&m_buckBuffer[i]));
 #ifdef _DEBUG
 		CheckResult(result, "SwapChain->GetBuffer");
 #endif
 	//ディスクリプタ（レンダーターゲットビュー）を作って入れる
-		m_dev->CreateRenderTargetView(m_buckbuffer[i].Get(), nullptr, rtvHandle);// 取り出したバッファを、RTVとしてメモリに登録
+		m_dev->CreateRenderTargetView(m_buckBuffer[i].Get(), nullptr, rtvHandle);// 取り出したバッファを、RTVとしてメモリに登録
 		rtvHandle.ptr += m_dev->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);//次のバッファここでいう２枚目のバックバッファのために次の保存開始位置を指定する
 	}
 
@@ -240,6 +239,49 @@ HRESULT DX12App::Init(HWND hWnd, int width, int height)
 	dsvHeapDesc.NumDescriptors = 1;
 	dsvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
 	dsvHeapDesc.NodeMask = 0;
+
+	result = m_dev->CreateDescriptorHeap(&dsvHeapDesc, IID_PPV_ARGS(&m_dsvHeap));
+#ifdef _DEBUG
+	CheckResult(result, "CreateDsvHeap");
+#endif
+
+	//深度テクスチャ（Zバッファ）リソースの設定
+	D3D12_RESOURCE_DESC depthResDesc = {};
+	depthResDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+	depthResDesc.Width = width;   // ウィンドウの幅と同じ
+	depthResDesc.Height = height; // ウィンドウの高さと同じ
+	depthResDesc.DepthOrArraySize = 1;
+	depthResDesc.MipLevels = 1;
+	depthResDesc.Format = DXGI_FORMAT_D32_FLOAT; // 32ビット浮動小数点数で深度を記録
+	depthResDesc.SampleDesc.Count = 1;
+	depthResDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
+
+	//リソースのクリア操作を最適化するための構造体を設定
+	D3D12_CLEAR_VALUE depthClearValue = {};
+	depthClearValue.Format = DXGI_FORMAT_D32_FLOAT;
+	depthClearValue.DepthStencil.Depth = 1.0f;
+	depthClearValue.DepthStencil.Stencil = 0;
+
+	D3D12_HEAP_PROPERTIES depthHeapProp = {};
+	depthHeapProp.Type = D3D12_HEAP_TYPE_DEFAULT;
+
+	result = m_dev->CreateCommittedResource(
+		&depthHeapProp,//VRAMのメモリの設定どういうメモリに置くか
+		D3D12_HEAP_FLAG_NONE,
+		&depthResDesc,//リソースの設計図
+		D3D12_RESOURCE_STATE_DEPTH_WRITE, // 最初から深度書き込み用の状態にしておく
+		&depthClearValue,//クリア時の初期値
+		IID_PPV_ARGS(&m_depthBuffer)//出力先
+	);
+#ifdef _DEBUG
+	CheckResult(result, "CreateDepthBuffer");
+#endif
+	//ディスクリプタ（深度ビュー）をつくってディスクリプタヒープに入れる
+	D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc = {};
+	dsvDesc.Format = DXGI_FORMAT_D32_FLOAT;
+	dsvDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
+	dsvDesc.Flags = D3D12_DSV_FLAG_NONE;
+	m_dev->CreateDepthStencilView(m_depthBuffer.Get(), &dsvDesc, m_dsvHeap->GetCPUDescriptorHandleForHeapStart());
 
 	//フェンスを作る
 	UINT fenceVal = 0;
@@ -288,12 +330,14 @@ HRESULT DX12App::InitPipeline()
 #ifdef _DEBUG
 	CheckResult(result, "CompileVertexShader");
 #endif
+	//頂点の説明書
 	D3D12_INPUT_ELEMENT_DESC inputElementDescs[] =
 	{
 		{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
 		{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
 	};
 
+	//ルートシグネチャ設定
 	D3D12_ROOT_SIGNATURE_DESC rootSigDesc = {};
 	rootSigDesc.NumParameters = 0;
 	rootSigDesc.pParameters = nullptr;
@@ -312,6 +356,7 @@ HRESULT DX12App::InitPipeline()
 	CheckResult(result, "CreateRootSignature");
 #endif
 
+	//グラフィックパイプラインステート設定
 	D3D12_GRAPHICS_PIPELINE_STATE_DESC m_gps = {};
 	m_gps.pRootSignature = m_rootSignature.Get();
 	m_gps.VS = { _vsBlob->GetBufferPointer(), _vsBlob->GetBufferSize() };
@@ -325,7 +370,7 @@ HRESULT DX12App::InitPipeline()
 	D3D12_BLEND_DESC m_gpsBlendDesc = {};
 	m_gpsBlendDesc.AlphaToCoverageEnable = false;
 	m_gpsBlendDesc.IndependentBlendEnable = false;
-	D3D12_RENDER_TARGET_BLEND_DESC m_rtBlendDesc;
+	D3D12_RENDER_TARGET_BLEND_DESC m_rtBlendDesc = {};
 	m_rtBlendDesc.BlendEnable = false;
 	m_rtBlendDesc.LogicOpEnable = false;
 	m_rtBlendDesc.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
@@ -336,9 +381,17 @@ HRESULT DX12App::InitPipeline()
 	m_gps.InputLayout = { inputElementDescs, _countof(inputElementDescs) };
 	m_gps.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
 
+	D3D12_DEPTH_STENCIL_DESC depthStencilDesc = {};
+	depthStencilDesc.DepthEnable = true;
+	depthStencilDesc.StencilEnable = false;
+	depthStencilDesc.DepthFunc = D3D12_COMPARISON_FUNC_LESS;
+
+	m_gps.DepthStencilState = depthStencilDesc;
+
 	m_gps.NumRenderTargets = 1;
 	m_gps.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM; // スワップチェーンと一致させる
-	
+	m_gps.DSVFormat = DXGI_FORMAT_D32_FLOAT;
+
 	m_gps.SampleMask = D3D12_DEFAULT_SAMPLE_MASK;
 	m_gps.SampleDesc.Count = 1;
 
@@ -364,7 +417,7 @@ void DX12App::Render()
 	D3D12_RESOURCE_BARRIER barrier = {};
 	barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
 	barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-	barrier.Transition.pResource = m_buckbuffer[backBufferIndex].Get();
+	barrier.Transition.pResource = m_buckBuffer[backBufferIndex].Get();
 	barrier.Transition.Subresource = 0;
 	barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT;
 	barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
@@ -374,10 +427,14 @@ void DX12App::Render()
 	D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = m_rtvHeap->GetCPUDescriptorHandleForHeapStart();//表裏でループを回すために毎ループリセットする。
 	rtvHandle.ptr += backBufferIndex * m_dev->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);;//表裏どっちのバックバッファ持ってくるか計算している。
 
-	m_cmdList->OMSetRenderTargets(1, &rtvHandle, FALSE, nullptr);
+	D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = m_dsvHeap->GetCPUDescriptorHandleForHeapStart();
+
+	m_cmdList->OMSetRenderTargets(1, &rtvHandle, FALSE, &dsvHandle);
 
 	float clearColor[] = { 0.4f, 0.6f, 0.9f, 1.0f };
-	m_cmdList->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
+	m_cmdList->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);//RTVのクリア処理。これをやらないと残像が黒くなって現れる場合がある。
+	m_cmdList->ClearDepthStencilView(dsvHandle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
+
 
 	barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
 	barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
@@ -400,25 +457,3 @@ void DX12App::Render()
 		CloseHandle(eventHandle);
 	}
 }
-
-/*
-HRESULT DX12App::Release()
-{
-	m_fence->Release();
-		for (int i = BACK_BUFFER_COUNT - 1; i >= 0; i--)
-		{
-			m_rtvResources[i]->Release();
-		}
-	m_rtvHeap->Release();
-	m_swapChain->Release();
-	m_cmdQueue->Release();
-	m_cmdList->Release();
-	for (int i = BACK_BUFFER_COUNT - 1; i >= 0; i--)
-	{
-		m_cmdAllocators[i]->Release();
-	}
-	m_dev->Release();
-	m_dxgiFactory->Release();
-	return S_OK;
-}
-*/

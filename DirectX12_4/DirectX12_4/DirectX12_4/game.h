@@ -32,9 +32,10 @@ private:
 	UINT m_nextSrvIndex = 0;
 	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_smpHeap = nullptr;
 	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_dsvHeap = nullptr;
+	Microsoft::WRL::ComPtr<ID3D12Resource> m_depthBuffer = nullptr;
 	Microsoft::WRL::ComPtr<ID3D12Fence> m_fence = nullptr;
 	UINT64 m_fenceVal;
-	Microsoft::WRL::ComPtr<ID3D12Resource> m_buckbuffer[BACK_BUFFER_COUNT] = {};
+	Microsoft::WRL::ComPtr<ID3D12Resource> m_buckBuffer[BACK_BUFFER_COUNT] = {};
 	Microsoft::WRL::ComPtr<ID3D12RootSignature> m_rootSignature = nullptr;
 	Microsoft::WRL::ComPtr<ID3D12PipelineState> m_pipelineState = nullptr;
 public:
