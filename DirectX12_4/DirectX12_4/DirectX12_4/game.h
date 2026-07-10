@@ -3,6 +3,7 @@
 #include <DirectXMath.h>
 #include <string>
 #include <fbxsdk.h>
+#include<vector>
 #include<map>
 #include<wrl/client.h>
 #include<DirectXMath.h>
@@ -61,12 +62,7 @@ class Model {
 private:	
 	Microsoft::WRL::ComPtr<ID3D12Resource> m_vertexBuffer = nullptr;
 	D3D12_VERTEX_BUFFER_VIEW m_vbView = {};
-	//マテリアルマップ
-	struct MATERIAL {
-		std::vector<float> materials;
-		std::string textureFileName;
-	};
-	std::map<std::string, MATERIAL> m_materialMap;//マテリアル名、マテリアル情報
+	std::vector<std::string> materialName;
 	struct VERTEX {
 		DirectX::XMFLOAT3 Position;
 		DirectX::XMFLOAT3 Normal;
@@ -76,6 +72,7 @@ private:
 	};
 public:
 	bool LoadModel(const RenderContext& context, const std::string& filename);
-	void LoadMaterial(fbxsdk::FbxSurfaceMaterial* material);
+	void LoadMateial(fbxsdk::FbxSurfaceMaterial* material);
+	void LoadVertexPosition(fbxsdk::FbxMesh* mesh);
 	bool Draw(const RenderContext& context);
 };

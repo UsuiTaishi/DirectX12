@@ -481,14 +481,23 @@ bool Model::LoadModel(const RenderContext& context, const string& filename)
 	fbxImporter->Destroy();//データはシーンにあるのでもういらない
 
 	FbxGeometryConverter fbxConverter(fbxManager);
-	fbxConverter.SplitMeshesPerMaterial(fbxScene, true);//マテリアルっごとにメッシュを分割する。
+	fbxConverter.SplitMeshesPerMaterial(fbxScene, true);//マテリアルごとにメッシュを分割する。
 	fbxConverter.Triangulate(fbxScene, true, false);//ポリゴンを三角形化する。
 
 	//マテリアル読み込み
-	int numMaterials = fbxScene->GetSrcObjectCount<FbxSurfaceMaterial>();//このFBXシーン全体に登録されているマテリアルの総数を取得する
+	int numMaterials = fbxScene->GetMaterialCount();//このFBXシーン全体に登録されているマテリアルの総数を取得する
 	for (int i = 0; i < numMaterials; i++)
 	{
-		LoadMaterial(fbxScene->GetSrcObject<FbxSurfaceMaterial>(i));
+		//マテリアル名のみ抽出する。
+		LoadMateial(fbxScene->GetMaterial(i));
+	}
+
+	fbxScene->GetRootNode();
+
+	int numMesh = fbxScene->GetSrcObjectCount<FbxMesh>();
+	for (int i = 0; i < numMesh; i++)
+	{
+		LoadVertexPosition(fbxScene->GetSrcObject<FbxMesh>(i));
 	}
 
 
@@ -496,16 +505,14 @@ bool Model::LoadModel(const RenderContext& context, const string& filename)
 	if (!fbxGeometoryConverter.Triangulate(fbxScene, true, false)) return false;//面を三角化
 }
 
-void Model::LoadMaterial(FbxSurfaceMaterial* material)
+void Model::LoadMateial(FbxSurfaceMaterial* material)
 {
-	MATERIAL tmpMaterial;
+	materialName.push_back(material->GetName());
+}
 
-	FbxProperty prop;//ディフーズ、ラフネスなどを辞書のように「名前（文字列）でデータを検索して取り出す」仕組みになっており、その取り出した属性の入れ物が FbxProperty
-	FbxFileTexture* texture = nullptr;
+void Model::LoadVertexPosition(FbxMesh* mesh)
+{
 
-	prop = material->FindProperty(FbxSurfaceMaterial::sDiffuse);
-
-	texture = prop.GetSrcObject<FbxFileTexture>(0);
 }
 
 bool Model::Draw(const RenderContext& context)
