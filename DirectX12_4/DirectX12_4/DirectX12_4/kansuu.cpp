@@ -500,10 +500,12 @@ void Model::LoadMaterial(FbxSurfaceMaterial* material)
 {
 	MATERIAL tmpMaterial;
 
-	FbxDouble3 colors;
 	FbxProperty prop;//ディフーズ、ラフネスなどを辞書のように「名前（文字列）でデータを検索して取り出す」仕組みになっており、その取り出した属性の入れ物が FbxProperty
-	
-	prop = material->FindProperty();
+	FbxFileTexture* texture = nullptr;
+
+	prop = material->FindProperty(FbxSurfaceMaterial::sDiffuse);
+
+	texture = prop.GetSrcObject<FbxFileTexture>(0);
 }
 
 bool Model::Draw(const RenderContext& context)

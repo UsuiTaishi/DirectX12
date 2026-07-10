@@ -2,8 +2,10 @@
 #include <tchar.h>
 #include <DirectXMath.h>
 #include <string>
+#include <fbxsdk.h>
 #include<map>
 #include<wrl/client.h>
+#include<DirectXMath.h>
 
 // すべて中身は書かずに、末尾をセミコロン「;」で終わらせる形にします
 
@@ -65,8 +67,15 @@ private:
 		std::string textureFileName;
 	};
 	std::map<std::string, MATERIAL> m_materialMap;//マテリアル名、マテリアル情報
+	struct VERTEX {
+		DirectX::XMFLOAT3 Position;
+		DirectX::XMFLOAT3 Normal;
+		DirectX::XMFLOAT2 UV;
+		DirectX::XMFLOAT3 Tangent;
+		DirectX::XMFLOAT4 Color;
+	};
 public:
 	bool LoadModel(const RenderContext& context, const std::string& filename);
-	void LoadMaterial(FbxSurfaceMaterial* material);
+	void LoadMaterial(fbxsdk::FbxSurfaceMaterial* material);
 	bool Draw(const RenderContext& context);
 };
