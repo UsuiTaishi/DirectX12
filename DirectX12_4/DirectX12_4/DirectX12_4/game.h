@@ -2,6 +2,7 @@
 #include <tchar.h>
 #include <DirectXMath.h>
 #include <string>
+#include<map>
 #include<wrl/client.h>
 
 // すべて中身は書かずに、末尾をセミコロン「;」で終わらせる形にします
@@ -17,6 +18,8 @@ void CheckResult(HRESULT result, std::string process);
 void OnClose(HWND hWnd);
 
 void OnDestroy();
+
+LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
 
 class DX12App {
 private:
@@ -45,20 +48,25 @@ public:
 	//HRESULT Release();
 };
 
-LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
+//描画に必要なインフラをまとめる構造体、モデルクラスとかに渡す
+struct RenderContext {
+	ID3D12Device* device;
+	ID3D12GraphicsCommandList* cmdList;
+	ID3D12DescriptorHeap* sevHeap;
+};
 
-/*
-HRESULT InitDX3D
-(
-	HWND _hwnd,
-	IDXGIFactory6*& _dxgiFactory,
-	ID3D12Device*& _dev,
-	ID3D12CommandAllocator* _GraphicsCmdAllocators[2],
-	ID3D12GraphicsCommandList*& _GraphicsCmdList,
-	ID3D12CommandQueue*& _GraphicsCmdQuene,
-	DXGI_SWAP_CHAIN_DESC1& _swapChainDesc,
-	IDXGISwapChain4*& _swapChain,
-	ID3D12DescriptorHeap*& _rtvHeap,
-	ID3D12Fence*& _fence
-);
-*/
+class Model {
+private:	
+	Microsoft::WRL::ComPtr<ID3D12Resource> m_vertexBuffer = nullptr;
+	D3D12_VERTEX_BUFFER_VIEW m_vbView = {};
+	//マテリアルマップ
+	struct MATERIAL {
+		std::vector<float> materials;
+		std::string textureFileName;
+	};
+	std::map<std::string, MATERIAL> m_materialMap;//マテリアル名、マテリアル情報
+public:
+	bool LoadModel(const RenderContext& context, const std::string& filename);
+	void LoadMaterial(FbxSurfaceMaterial* material);
+	bool Draw(const RenderContext& context);
+};

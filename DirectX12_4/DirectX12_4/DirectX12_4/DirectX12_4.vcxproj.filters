@@ -31,6 +31,9 @@
     <None Include="shader_header.hlsli">
       <Filter>リソース ファイル</Filter>
     </None>
+    <None Include="..\..\..\..\..\Erika\erika.fbx">
+      <Filter>リソース ファイル</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="VertexShader.hlsl">

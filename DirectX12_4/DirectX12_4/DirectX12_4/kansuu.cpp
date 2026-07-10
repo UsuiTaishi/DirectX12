@@ -6,10 +6,16 @@
 #include <vector>
 #include <d3dcompiler.h>
 #include"game.h"
+#include<cassert>
 
 #ifdef _DEBUG
 #include <iostream>
 #endif
+
+#include <fbxsdk.h>
+#pragma comment(lib, "libfbxsdk-md.lib")
+#pragma comment(lib, "libxml2-md.lib")
+#pragma comment(lib, "zlib-md.lib")
 
 #pragma comment(lib,"d3d12.lib")
 #pragma comment(lib,"dxgi.lib")
@@ -456,4 +462,52 @@ void DX12App::Render()
 		WaitForSingleObject(eventHandle, INFINITE);//特定の条件（シグナル）が満たされるか、指定した時間が経過するまで、プログラムの処理を一時停止して待つ
 		CloseHandle(eventHandle);
 	}
+}
+
+bool Model::LoadModel(const RenderContext& context, const string& filename)
+{
+	FbxManager* fbxManager = FbxManager::Create();//FBXManager
+
+	FbxIOSettings* ios = FbxIOSettings::Create(fbxManager, IOSROOT);//IO設定第二引数は設定のルートパスを表している。インポートの設定
+	fbxManager->SetIOSettings(ios);
+
+	FbxImporter* fbxImporter = FbxImporter::Create(fbxManager, "");
+
+	FbxScene* fbxScene = FbxScene::Create(fbxManager, "My scene");//シーンの作成。このシーンにマテリアルとかメッシュとかを置いていく
+
+	fbxImporter->Initialize(filename.c_str(), -1, NULL);//第三引数はインポート時の挙動（テクスチャやアニメーションを読み込むかなど）を制御する設定オブジェクトへのポインタを指定します。
+
+	fbxImporter->Import(fbxScene);
+	fbxImporter->Destroy();//データはシーンにあるのでもういらない
+
+	FbxGeometryConverter fbxConverter(fbxManager);
+	fbxConverter.SplitMeshesPerMaterial(fbxScene, true);//マテリアルっごとにメッシュを分割する。
+	fbxConverter.Triangulate(fbxScene, true, false);//ポリゴンを三角形化する。
+
+	//マテリアル読み込み
+	int numMaterials = fbxScene->GetSrcObjectCount<FbxSurfaceMaterial>();//このFBXシーン全体に登録されているマテリアルの総数を取得する
+	for (int i = 0; i < numMaterials; i++)
+	{
+		LoadMaterial(fbxScene->GetSrcObject<FbxSurfaceMaterial>(i));
+	}
+
+
+	FbxGeometryConverter fbxGeometoryConverter(fbxManager);
+	if (!fbxGeometoryConverter.Triangulate(fbxScene, true, false)) return false;//面を三角化
+}
+
+void Model::LoadMaterial(FbxSurfaceMaterial* material)
+{
+	MATERIAL tmpMaterial;
+
+	FbxDouble3 colors;
+	FbxProperty prop;//ディフーズ、ラフネスなどを辞書のように「名前（文字列）でデータを検索して取り出す」仕組みになっており、その取り出した属性の入れ物が FbxProperty
+	
+	prop = material->FindProperty();
+}
+
+bool Model::Draw(const RenderContext& context)
+{
+
+	return true;
 }
