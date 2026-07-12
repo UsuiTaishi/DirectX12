@@ -22,6 +22,7 @@
 #pragma comment(lib,"d3dcompiler.lib")
 
 using namespace std;
+using namespace fbxsdk;
 
 void EnableDebugLayer() {
 	ID3D12Debug* debugLayer = nullptr;//デバッグレイヤーを使うためのインターフェースを宣言
@@ -411,6 +412,16 @@ HRESULT DX12App::InitPipeline()
 	return S_OK;
 }
 
+RenderContext DX12App::CreateRenderContext()
+{
+	RenderContext rContext = {};
+	rContext.device = m_dev.Get();
+	rContext.cmdList = m_cmdList.Get();
+	rContext.srvHeap = m_srvHeap.Get();
+
+	return rContext;
+}
+
 void DX12App::Render()
 {
 	HRESULT result;
@@ -484,33 +495,99 @@ bool Model::LoadModel(const RenderContext& context, const string& filename)
 	fbxConverter.SplitMeshesPerMaterial(fbxScene, true);//マテリアルごとにメッシュを分割する。
 	fbxConverter.Triangulate(fbxScene, true, false);//ポリゴンを三角形化する。
 
-	//マテリアル読み込み
+	/*マテリアル読み込み
 	int numMaterials = fbxScene->GetMaterialCount();//このFBXシーン全体に登録されているマテリアルの総数を取得する
 	for (int i = 0; i < numMaterials; i++)
 	{
 		//マテリアル名のみ抽出する。
 		LoadMateial(fbxScene->GetMaterial(i));
-	}
-
-	fbxScene->GetRootNode();
+	}*/
 
 	int numMesh = fbxScene->GetSrcObjectCount<FbxMesh>();
 	for (int i = 0; i < numMesh; i++)
 	{
-		LoadVertexPosition(fbxScene->GetSrcObject<FbxMesh>(i));
+		LoadMesh(fbxScene->GetSrcObject<FbxMesh>(i));
 	}
-
 
 	FbxGeometryConverter fbxGeometoryConverter(fbxManager);
 	if (!fbxGeometoryConverter.Triangulate(fbxScene, true, false)) return false;//面を三角化
 }
 
-void Model::LoadMateial(FbxSurfaceMaterial* material)
+void Model::LoadMesh(FbxMesh* mesh)
 {
-	materialName.push_back(material->GetName());
+	MeshData data = {};
+	int vertexCount = mesh->GetPolygonVertexCount();//全頂点数を調べる(blenderなどで表示される頂点数ではなく。頂点インデックスで並べたときの要素数)
+	int* vertexIndex = mesh->GetPolygonVertices();//頂点番号配列の先頭ポインタを取得。インデックスバッファ
+
+	//頂点座標用
+	FbxVector4* vertexPos = mesh->GetControlPoints();//x,y,z,w配列を取得（座標は記録されてないあくまで(x1,y1,z1,w1)[0],(x2,y2,z3,w3)[1],()[3],()[4]....）、配列の先頭ポインタが返される。
+
+	//ノーマル用
+	FbxArray<FbxVector4> normals;
+	mesh->GetPolygonVertexNormals(normals);//引数は結果を収納するところ
+
+	//UV用
+	FbxStringList uvset_names;
+	mesh->GetUVSetNames(uvset_names);//UVセット名前リストを取得。
+	FbxArray<FbxVector2> texcoord;
+	mesh->GetPolygonVertexUVs(uvset_names.GetStringAt(0), texcoord);
+
+	//接空間用 専用ヘルパー関数がないのでレイヤー構造から直接取得します。
+	if (!mesh->GetElementTangentCount())
+	{
+		mesh->GenerateTangentsData(0, false, false);
+	}
+	//レイヤー0から接空間を取得
+	FbxGeometryElementTangent* tangentElement = mesh->GetElementTangent(0);
+	FbxLayerElementArrayTemplate<FbxVector4>& tangent = tangentElement->GetDirectArray();
+	
+	//なんのマテリアルが割り当てられてるか調べるこれも例や構造から直接取得します。
+	if (mesh->GetElementMaterialCount() == 0) 
+	{
+		data.materialName = "";
+		return;
+	}
+	FbxLayerElementMaterial* material = mesh->GetElementMaterial(0);
+	int index = material->GetIndexArray().GetAt(0);
+	FbxSurfaceMaterial* surface_material =  mesh->GetNode()->GetSrcObject<FbxSurfaceMaterial>(index);
+	if (surface_material != nullptr) {
+		data.materialName = surface_material->GetName();
+	}
+	else {
+		data.materialName = "";
+	}
+
+	data.m_mVertexData = {};
+
+	for (int i = 0; i < vertexCount; i++)
+	{
+		int controlPointIndex = vertexIndex[i];//インデックスバッファ用にインデックスに従って通りに座標を配置していきたいので
+
+
+        //MESH構造体に格納（float型へ変換）まずは頂点座標から
+		data.m_mVertexData[i].Position[0] = static_cast<float>(vertexPos[controlPointIndex][0]);//0つまりx座標
+		data.m_mVertexData[i].Position[1] = static_cast<float>(vertexPos[controlPointIndex][1]);//0つまりy座標
+		data.m_mVertexData[i].Position[2] = static_cast<float>(vertexPos[controlPointIndex][2]);//0つまりz座標
+		//これでv0(座標),v1(座標),v2(座標),v0(座標),v1(座標),v3(座標)みたいな感じでインデックス順に座標データの配列ができる重複してるとこもあるのでDirectXに渡してインデックスを利用する際は重複を消してインデックスを付与しないといけない
+
+		//ノーマル
+		data.m_mVertexData[i].Normal[0] = static_cast<float>(normals[i][0]);
+		data.m_mVertexData[i].Normal[1] = static_cast<float>(normals[i][1]);
+		data.m_mVertexData[i].Normal[2] = static_cast<float>(normals[i][2]);
+		
+		//UV
+		data.m_mVertexData[i].UV[0] = static_cast<float>(texcoord[i][0]);
+		data.m_mVertexData[i].UV[1] = static_cast<float>(texcoord[i][1]);
+
+		//接空間
+		data.m_mVertexData[i].Tangent[0] = static_cast<float>(tangent[i][0]);
+		data.m_mVertexData[i].Tangent[1] = static_cast<float>(tangent[i][1]);
+		data.m_mVertexData[i].Tangent[2] = static_cast<float>(tangent[i][2]);
+	}
+	m_meshes.push_back(data);
 }
 
-void Model::LoadVertexPosition(FbxMesh* mesh)
+void Model::CreateVertexBuffer(RenderContext& context, std::vector<Vertex>& vertices)
 {
 
 }

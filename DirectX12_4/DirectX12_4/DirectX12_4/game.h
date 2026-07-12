@@ -24,6 +24,13 @@ void OnDestroy();
 
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
 
+//描画に必要なインフラをまとめる構造体、モデルクラスとかに渡す
+struct RenderContext {
+	ID3D12Device* device;
+	ID3D12GraphicsCommandList* cmdList;
+	ID3D12DescriptorHeap* srvHeap;
+};
+
 class DX12App {
 private:
 	Microsoft::WRL::ComPtr<IDXGIFactory6> m_dxgiFactory = nullptr;
@@ -47,32 +54,30 @@ private:
 public:
 	HRESULT Init(HWND hWnd, int width, int height);
 	HRESULT InitPipeline();
+	RenderContext CreateRenderContext();
 	void Render();
 	//HRESULT Release();
 };
 
-//描画に必要なインフラをまとめる構造体、モデルクラスとかに渡す
-struct RenderContext {
-	ID3D12Device* device;
-	ID3D12GraphicsCommandList* cmdList;
-	ID3D12DescriptorHeap* sevHeap;
-};
-
 class Model {
-private:	
+private:
+	//頂点バッファーの頂点レイアウトの参照に
+	struct Vertex {
+		float Position[3];
+		float Normal[3];
+		float UV[2];
+		float Tangent[3];
+	};
 	Microsoft::WRL::ComPtr<ID3D12Resource> m_vertexBuffer = nullptr;
 	D3D12_VERTEX_BUFFER_VIEW m_vbView = {};
-	std::vector<std::string> materialName;
-	struct VERTEX {
-		DirectX::XMFLOAT3 Position;
-		DirectX::XMFLOAT3 Normal;
-		DirectX::XMFLOAT2 UV;
-		DirectX::XMFLOAT3 Tangent;
-		DirectX::XMFLOAT4 Color;
+	struct MeshData{
+	std::string materialName;
+	std::vector<Vertex> m_mVertexData;
 	};
+	std::vector<MeshData> m_meshes;
 public:
 	bool LoadModel(const RenderContext& context, const std::string& filename);
-	void LoadMateial(fbxsdk::FbxSurfaceMaterial* material);
-	void LoadVertexPosition(fbxsdk::FbxMesh* mesh);
+	void LoadMesh(fbxsdk::FbxMesh* mesh);
+	void CreateVertexBuffer(RenderContext& context, std::vector<Vertex>& vertices);
 	bool Draw(const RenderContext& context);
 };
