@@ -51,11 +51,15 @@ private:
 	Microsoft::WRL::ComPtr<ID3D12Resource> m_buckBuffer[BACK_BUFFER_COUNT] = {};
 	Microsoft::WRL::ComPtr<ID3D12RootSignature> m_rootSignature = nullptr;
 	Microsoft::WRL::ComPtr<ID3D12PipelineState> m_pipelineState = nullptr;
+	D3D12_VIEWPORT m_viewport = {};
+	D3D12_RECT m_scissorrect = {};
+	D3D12_RESOURCE_BARRIER barrier = {};
 public:
 	HRESULT Init(HWND hWnd, int width, int height);
 	HRESULT InitPipeline();
 	RenderContext CreateRenderContext();
-	void Render();
+	void BeginFrame();
+	void EndFrame();
 	//HRESULT Release();
 };
 
@@ -69,8 +73,10 @@ private:
 		float Tangent[3];
 	};
 	Microsoft::WRL::ComPtr<ID3D12Resource> m_vertexBuffer = nullptr;
+	UINT vertexCount = 0;
 	D3D12_VERTEX_BUFFER_VIEW m_vbView = {};
-	struct MeshData{
+	struct MeshData
+	{
 	std::string materialName;
 	std::vector<Vertex> m_mVertexData;
 	};
@@ -78,6 +84,6 @@ private:
 public:
 	bool LoadModel(const RenderContext& context, const std::string& filename);
 	void LoadMesh(fbxsdk::FbxMesh* mesh);
-	void CreateVertexBuffer(RenderContext& context, std::vector<Vertex>& vertices);
+	void CreateVertexBuffer(const RenderContext& context, std::vector<Vertex>& vertices);
 	bool Draw(const RenderContext& context);
 };

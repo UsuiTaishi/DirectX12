@@ -22,7 +22,6 @@
 #pragma comment(lib,"d3dcompiler.lib")
 
 using namespace std;
-using namespace fbxsdk;
 
 void EnableDebugLayer() {
 	ID3D12Debug* debugLayer = nullptr;//デバッグレイヤーを使うためのインターフェースを宣言
@@ -296,6 +295,17 @@ HRESULT DX12App::Init(HWND hWnd, int width, int height)
 #ifdef _DEBUG
 	CheckResult(result, "CreateFence");
 #endif
+	m_viewport.Width = 800;
+	m_viewport.Height = 600;
+	m_viewport.TopLeftX = 0;
+	m_viewport.TopLeftY = 0;
+	m_viewport.MaxDepth = 1.0;
+	m_viewport.MinDepth = 0.0;
+
+	m_scissorrect.top = 0;
+	m_scissorrect.left = 0;
+	m_scissorrect.right = 800;
+	m_scissorrect.bottom = 600;
 	return S_OK;
 }
 
@@ -341,7 +351,9 @@ HRESULT DX12App::InitPipeline()
 	D3D12_INPUT_ELEMENT_DESC inputElementDescs[] =
 	{
 		{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-		{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
+		{ "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+		{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+		{ "TANGENT", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
 	};
 
 	//ルートシグネチャ設定
@@ -422,7 +434,7 @@ RenderContext DX12App::CreateRenderContext()
 	return rContext;
 }
 
-void DX12App::Render()
+void DX12App::BeginFrame()
 {
 	HRESULT result;
 	
@@ -431,7 +443,9 @@ void DX12App::Render()
 	m_cmdAllocators[backBufferIndex]->Reset();//コマンドアロケータをリセット
 	m_cmdList->Reset(m_cmdAllocators[backBufferIndex].Get(), nullptr);//コマンドリストをリセット
 
-	D3D12_RESOURCE_BARRIER barrier = {};
+	m_cmdList->RSSetViewports(1, &m_viewport);
+	m_cmdList->RSSetScissorRects(1, &m_scissorrect);
+
 	barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
 	barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
 	barrier.Transition.pResource = m_buckBuffer[backBufferIndex].Get();
@@ -451,8 +465,10 @@ void DX12App::Render()
 	float clearColor[] = { 0.4f, 0.6f, 0.9f, 1.0f };
 	m_cmdList->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);//RTVのクリア処理。これをやらないと残像が黒くなって現れる場合がある。
 	m_cmdList->ClearDepthStencilView(dsvHandle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
+}
 
-
+void DX12App::EndFrame()
+{
 	barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
 	barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
 	m_cmdList->ResourceBarrier(1, &barrier);//ここまではリソースは書き込み用だったがここからは読み込み用
@@ -477,7 +493,7 @@ void DX12App::Render()
 
 bool Model::LoadModel(const RenderContext& context, const string& filename)
 {
-	FbxManager* fbxManager = FbxManager::Create();//FBXManager
+	fbxsdk::FbxManager* fbxManager = fbxsdk::FbxManager::Create();//FBXManager
 
 	FbxIOSettings* ios = FbxIOSettings::Create(fbxManager, IOSROOT);//IO設定第二引数は設定のルートパスを表している。インポートの設定
 	fbxManager->SetIOSettings(ios);
@@ -485,6 +501,12 @@ bool Model::LoadModel(const RenderContext& context, const string& filename)
 	FbxImporter* fbxImporter = FbxImporter::Create(fbxManager, "");
 
 	FbxScene* fbxScene = FbxScene::Create(fbxManager, "My scene");//シーンの作成。このシーンにマテリアルとかメッシュとかを置いていく
+
+	if (!fbxImporter->Initialize(filename.c_str(), -1, NULL))
+	{
+		OutputDebugStringA("[FAILED] FBXファイルの読み込みに失敗しました。パスを確認してください。\n");
+		return false;
+	}
 
 	fbxImporter->Initialize(filename.c_str(), -1, NULL);//第三引数はインポート時の挙動（テクスチャやアニメーションを読み込むかなど）を制御する設定オブジェクトへのポインタを指定します。
 
@@ -508,15 +530,20 @@ bool Model::LoadModel(const RenderContext& context, const string& filename)
 	{
 		LoadMesh(fbxScene->GetSrcObject<FbxMesh>(i));
 	}
+	std::vector<Vertex> allVertices;
+	for (const auto& mesh : m_meshes)
+	{
+		allVertices.insert(allVertices.end(), mesh.m_mVertexData.begin(), mesh.m_mVertexData.end());
+	}
 
-	FbxGeometryConverter fbxGeometoryConverter(fbxManager);
-	if (!fbxGeometoryConverter.Triangulate(fbxScene, true, false)) return false;//面を三角化
+	// 頂点バッファを作成
+	CreateVertexBuffer(context, allVertices);
 }
 
 void Model::LoadMesh(FbxMesh* mesh)
 {
 	MeshData data = {};
-	int vertexCount = mesh->GetPolygonVertexCount();//全頂点数を調べる(blenderなどで表示される頂点数ではなく。頂点インデックスで並べたときの要素数)
+	vertexCount = mesh->GetPolygonVertexCount();//全頂点数を調べる(blenderなどで表示される頂点数ではなく。頂点インデックスで並べたときの要素数)
 	int* vertexIndex = mesh->GetPolygonVertices();//頂点番号配列の先頭ポインタを取得。インデックスバッファ
 
 	//頂点座標用
@@ -545,19 +572,27 @@ void Model::LoadMesh(FbxMesh* mesh)
 	if (mesh->GetElementMaterialCount() == 0) 
 	{
 		data.materialName = "";
-		return;
 	}
-	FbxLayerElementMaterial* material = mesh->GetElementMaterial(0);
-	int index = material->GetIndexArray().GetAt(0);
-	FbxSurfaceMaterial* surface_material =  mesh->GetNode()->GetSrcObject<FbxSurfaceMaterial>(index);
-	if (surface_material != nullptr) {
-		data.materialName = surface_material->GetName();
-	}
-	else {
-		data.materialName = "";
+	else
+	{
+		FbxLayerElementMaterial* material = mesh->GetElementMaterial(0);
+		int index = material->GetIndexArray().GetAt(0);
+		FbxNode* node = mesh->GetNode();
+		FbxSurfaceMaterial* surface_material = nullptr;
+		if (node != nullptr) {
+			surface_material = node->GetSrcObject<FbxSurfaceMaterial>(index);//レイヤー構造似ないなら直接取ってきて
+		}
+
+		if (surface_material != nullptr) {
+			data.materialName = surface_material->GetName();
+		}
+		else {
+			data.materialName = "";
+		}
 	}
 
 	data.m_mVertexData = {};
+	data.m_mVertexData.resize(vertexCount);//メモリ確保
 
 	for (int i = 0; i < vertexCount; i++)
 	{
@@ -587,13 +622,62 @@ void Model::LoadMesh(FbxMesh* mesh)
 	m_meshes.push_back(data);
 }
 
-void Model::CreateVertexBuffer(RenderContext& context, std::vector<Vertex>& vertices)
+void Model::CreateVertexBuffer(const RenderContext& context, std::vector<Vertex>& vertices)
 {
+	HRESULT result;
+	D3D12_RESOURCE_DESC vertexResouceDesc = {};
+	vertexResouceDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+	vertexResouceDesc.Width = sizeof(Vertex)*vertices.size();
+	vertexResouceDesc.Height = 1;
+	vertexResouceDesc.SampleDesc.Count = 1;
+	vertexResouceDesc.SampleDesc.Quality = 0;
+	vertexResouceDesc.DepthOrArraySize = 1;
+	vertexResouceDesc.MipLevels = 1;
+	vertexResouceDesc.Format = DXGI_FORMAT_UNKNOWN;
+	vertexResouceDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
+	vertexResouceDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
 
+	D3D12_HEAP_PROPERTIES vertexheap = {};
+	vertexheap.Type = D3D12_HEAP_TYPE_UPLOAD;//CPUからアクセス可能
+	vertexheap.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;//カスタムのとき使うやつ
+	vertexheap.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;//カスタムのとき使うやつ
+
+	result = context.device->CreateCommittedResource
+	(
+		&vertexheap,
+		D3D12_HEAP_FLAG_NONE,
+		&vertexResouceDesc,
+		D3D12_RESOURCE_STATE_GENERIC_READ,//Gpuからは読み取り専用
+		nullptr,
+		IID_PPV_ARGS(m_vertexBuffer.GetAddressOf())
+	);
+#ifdef _DEBUG
+	CheckResult(result, "CommittedVertexResources");
+#endif
+
+	void* pMappedData = nullptr;
+	m_vertexBuffer->Map(0, nullptr, &pMappedData);
+	Vertex* pVertexData = static_cast<Vertex*>(pMappedData);
+
+	size_t offset = 0;
+	for (size_t i = 0; i < m_meshes.size(); i++)
+	{
+		MeshData& mesh = m_meshes[i];
+		copy(mesh.m_mVertexData.begin(), mesh.m_mVertexData.end(), pVertexData +  offset);//第３引数は配置するアドレス
+		offset += mesh.m_mVertexData.size();//MeshDataの頂点デーや分だけオフセットをずらす。
+	}
+	m_vertexBuffer->Unmap(0, nullptr);
+
+	m_vbView.BufferLocation = m_vertexBuffer->GetGPUVirtualAddress();
+	m_vbView.SizeInBytes = sizeof(Vertex)*vertices.size();
+	m_vbView.StrideInBytes = sizeof(Vertex);
 }
 
 bool Model::Draw(const RenderContext& context)
 {
+	context.cmdList->IASetVertexBuffers(0, 1, &m_vbView);
+	context.cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	context.cmdList->DrawInstanced(vertexCount, 1, 0, 0);
 
 	return true;
 }

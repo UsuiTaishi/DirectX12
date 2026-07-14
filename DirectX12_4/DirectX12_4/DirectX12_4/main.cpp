@@ -32,9 +32,14 @@ int WINAPI	WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 	const float aspect = float(window_height) / float(window_width);
 	HWND hwnd = CreateGameWindow(hInstance, window_width, window_height, _T("DX12 単純ポリゴンテスト"));
 	DX12App app;
+	Model erika;
 
 	app.Init(hwnd, window_width, window_height);
 	app.InitPipeline();
+	RenderContext renderContext = app.CreateRenderContext();
+
+	erika.LoadModel(renderContext, "erika.fbx");
+
 
 	ShowWindow(hwnd, SW_SHOW);
 
@@ -48,7 +53,13 @@ int WINAPI	WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 		}
 		else
 		{
-			app.Render();
+			app.BeginFrame();
+
+			//ここにモデルを描きこむ処理を
+
+			erika.Draw(renderContext);
+
+			app.EndFrame();
 		}
 	}
 	//app.Release();
