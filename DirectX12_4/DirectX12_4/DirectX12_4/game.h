@@ -73,6 +73,7 @@ private:
 		float Tangent[3];
 	};
 	Microsoft::WRL::ComPtr<ID3D12Resource> m_vertexBuffer = nullptr;
+	Microsoft::WRL::ComPtr<ID3D12Resource> m_constantBuffer = nullptr;
 	UINT vertexCount = 0;
 	D3D12_VERTEX_BUFFER_VIEW m_vbView = {};
 	struct MeshData
