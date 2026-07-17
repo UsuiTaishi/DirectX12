@@ -74,14 +74,14 @@ private:
 	};
 	Microsoft::WRL::ComPtr<ID3D12Resource> m_vertexBuffer = nullptr;
 	Microsoft::WRL::ComPtr<ID3D12Resource> m_constantBuffer = nullptr;
-	UINT vertexCount = 0;
+	UINT allVertexCount = 0;
 	D3D12_VERTEX_BUFFER_VIEW m_vbView = {};
 	struct MeshData
 	{
 	std::string materialName;
 	std::vector<Vertex> m_mVertexData;
 	};
-	std::vector<MeshData> m_meshes;
+	std::vector<MeshData> m_meshes;//マテリアルごとに分離したメッシュの配列
 public:
 	bool LoadModel(const RenderContext& context, const std::string& filename);
 	void LoadMesh(fbxsdk::FbxMesh* mesh);

@@ -445,6 +445,9 @@ void DX12App::BeginFrame()
 	m_cmdList->RSSetViewports(1, &m_viewport);
 	m_cmdList->RSSetScissorRects(1, &m_scissorrect);
 
+	m_cmdList->SetGraphicsRootSignature(m_rootSignature.Get());
+	m_cmdList->SetPipelineState(m_pipelineState.Get());
+
 	barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
 	barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
 	barrier.Transition.pResource = m_buckBuffer[backBufferIndex].Get();
@@ -527,7 +530,10 @@ bool Model::LoadModel(const RenderContext& context, const string& filename)
 	int numMesh = fbxScene->GetSrcObjectCount<FbxMesh>();
 	for (int i = 0; i < numMesh; i++)
 	{
-		LoadMesh(fbxScene->GetSrcObject<FbxMesh>(i));
+		FbxMesh* mesh = fbxScene->GetSrcObject<FbxMesh>(i);
+		LoadMesh(mesh);
+		UINT meshVertexCount = mesh->GetPolygonVertexCount();
+		allVertexCount += meshVertexCount;
 	}
 	std::vector<Vertex> allVertices;
 	for (const auto& mesh : m_meshes)
@@ -542,7 +548,7 @@ bool Model::LoadModel(const RenderContext& context, const string& filename)
 void Model::LoadMesh(FbxMesh* mesh)
 {
 	MeshData data = {};
-	vertexCount = mesh->GetPolygonVertexCount();//全頂点数を調べる(blenderなどで表示される頂点数ではなく。頂点インデックスで並べたときの要素数)
+	UINT vertexCount = mesh->GetPolygonVertexCount();//全頂点数を調べる(blenderなどで表示される頂点数ではなく。頂点インデックスで並べたときの要素数)
 	int* vertexIndex = mesh->GetPolygonVertices();//頂点番号配列の先頭ポインタを取得。インデックスバッファ
 
 	//頂点座標用
@@ -676,7 +682,7 @@ bool Model::Draw(const RenderContext& context)
 {
 	context.cmdList->IASetVertexBuffers(0, 1, &m_vbView);
 	context.cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-	context.cmdList->DrawInstanced(vertexCount, 1, 0, 0);
+	context.cmdList->DrawInstanced(allVertexCount, 1, 0, 0);
 
 	return true;
 }
