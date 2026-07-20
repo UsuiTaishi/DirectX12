@@ -2,6 +2,8 @@
 #include <tchar.h>
 #include <DirectXMath.h>
 #include <string>
+#include <d3d12.h>
+#include <dxgi1_6.h>
 #include <fbxsdk.h>
 #include<vector>
 #include<map>
@@ -28,7 +30,15 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
 struct RenderContext {
 	ID3D12Device* device;
 	ID3D12GraphicsCommandList* cmdList;
-	ID3D12DescriptorHeap* srvHeap;
+	DX12App* app;
+};
+
+struct shaderSet {
+	std::wstring vs;
+	std::wstring ps;
+	std::wstring gs;
+	std::wstring hs;
+	std::wstring ds;
 };
 
 class DX12App {
@@ -49,15 +59,13 @@ private:
 	Microsoft::WRL::ComPtr<ID3D12Fence> m_fence = nullptr;
 	UINT64 m_fenceVal;
 	Microsoft::WRL::ComPtr<ID3D12Resource> m_buckBuffer[BACK_BUFFER_COUNT] = {};
-	Microsoft::WRL::ComPtr<ID3D12RootSignature> m_rootSignature = nullptr;
-	Microsoft::WRL::ComPtr<ID3D12PipelineState> m_pipelineState = nullptr;
 	D3D12_VIEWPORT m_viewport = {};
 	D3D12_RECT m_scissorrect = {};
 	D3D12_RESOURCE_BARRIER barrier = {};
 public:
 	HRESULT Init(HWND hWnd, int width, int height);
-	HRESULT InitPipeline();
 	RenderContext CreateRenderContext();
+	void AllocateDescriptor(D3D12_CPU_DESCRIPTOR_HANDLE& outCpuHandle, D3D12_GPU_DESCRIPTOR_HANDLE& outGpuHandle);
 	void BeginFrame();
 	void EndFrame();
 	//HRESULT Release();
@@ -74,6 +82,7 @@ private:
 	};
 	Microsoft::WRL::ComPtr<ID3D12Resource> m_vertexBuffer = nullptr;
 	Microsoft::WRL::ComPtr<ID3D12Resource> m_constantBuffer = nullptr;
+	D3D12_GPU_DESCRIPTOR_HANDLE m_cbvGpuHandle = {};
 	UINT allVertexCount = 0;
 	D3D12_VERTEX_BUFFER_VIEW m_vbView = {};
 	struct MeshData
@@ -82,9 +91,39 @@ private:
 	std::vector<Vertex> m_mVertexData;
 	};
 	std::vector<MeshData> m_meshes;//マテリアルごとに分離したメッシュの配列
+	DirectX::XMMATRIX matrix;
 public:
 	bool LoadModel(const RenderContext& context, const std::string& filename);
 	void LoadMesh(fbxsdk::FbxMesh* mesh);
 	void CreateVertexBuffer(const RenderContext& context, std::vector<Vertex>& vertices);
 	bool Draw(const RenderContext& context);
+	void InitTransform(const RenderContext& context);
+};
+
+//マテリアルクラス、パイプラインステートとルートシグネチャを管理するよ
+class Material {
+private:
+	Microsoft::WRL::ComPtr<ID3D12RootSignature> m_rootSignature = nullptr;
+	Microsoft::WRL::ComPtr<ID3D12PipelineState> m_pipelineState = nullptr;
+	Microsoft::WRL::ComPtr<ID3DBlob> _vsBlob = nullptr;
+	Microsoft::WRL::ComPtr<ID3DBlob> _psBlob = nullptr;
+	Microsoft::WRL::ComPtr<ID3DBlob> _gsBlob = nullptr;
+	Microsoft::WRL::ComPtr<ID3DBlob> _hsBlob = nullptr;
+	Microsoft::WRL::ComPtr<ID3DBlob> _dsBlob = nullptr;
+	Microsoft::WRL::ComPtr<ID3DBlob> errorBlob = nullptr;
+	D3D12_GRAPHICS_PIPELINE_STATE_DESC m_GPS_DESC = {};
+public:
+	D3D12_GRAPHICS_PIPELINE_STATE_DESC GetDefaultGPSDesc(const shaderSet& shaders);
+	HRESULT InitPipeline(const RenderContext& context);
+};
+
+class Camera {
+private:
+	DirectX::XMMATRIX matrix;
+	Microsoft::WRL::ComPtr<ID3D12Resource> c_constantBuffer = nullptr;
+	D3D12_GPU_DESCRIPTOR_HANDLE c_cbvGpuHandle = {};
+public:
+	void Init(const RenderContext& context);
+	void Update();
+	void Bind();
 };

@@ -129,8 +129,12 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="kansuu.cpp" />
+    <ClCompile Include="CameraClass.cpp" />
+    <ClCompile Include="DX12App.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="MaterialClass.cpp" />
+    <ClCompile Include="ModelClass.cpp" />
+    <ClCompile Include="OpenWindow.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="game.h" />

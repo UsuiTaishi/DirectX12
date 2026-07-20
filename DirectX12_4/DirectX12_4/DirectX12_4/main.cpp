@@ -35,7 +35,6 @@ int WINAPI	WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 	Model erika;
 
 	app.Init(hwnd, window_width, window_height);
-	app.InitPipeline();
 	RenderContext renderContext = app.CreateRenderContext();
 
 	erika.LoadModel(renderContext, "erika.fbx");
