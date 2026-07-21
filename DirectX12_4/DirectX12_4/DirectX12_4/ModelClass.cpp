@@ -73,6 +73,11 @@ bool Model::LoadModel(const RenderContext& context, const string& filename)
 
 	// 頂点バッファを作成
 	CreateVertexBuffer(context, allVertices);
+
+	fbxScene->Destroy();
+	fbxManager->Destroy();
+	
+	return true;
 }
 
 void Model::LoadMesh(FbxMesh* mesh)

@@ -155,7 +155,7 @@ D3D12_GRAPHICS_PIPELINE_STATE_DESC Material::GetDefaultGPSDesc(const shaderSet& 
 	blendDesc.RenderTarget[0] = rtBlendDesc;
 	m_GPS_DESC.BlendState = blendDesc;
 	//サンプルマスク
-	m_GPS_DESC.SampleMask = UINT_MAX;
+	m_GPS_DESC.SampleMask = D3D12_DEFAULT_SAMPLE_MASK;
 	//ラスタライズ設定
 	D3D12_RASTERIZER_DESC rasterizerDesc = {};
 	rasterizerDesc.FillMode = D3D12_FILL_MODE_SOLID;
@@ -175,18 +175,18 @@ D3D12_GRAPHICS_PIPELINE_STATE_DESC Material::GetDefaultGPSDesc(const shaderSet& 
 	depthStencilDesc.DepthEnable = TRUE;
 	depthStencilDesc.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
 	depthStencilDesc.DepthFunc = D3D12_COMPARISON_FUNC_LESS;//深度テストの合格基準
+	depthStencilDesc.StencilEnable = FALSE;
 	depthStencilDesc.StencilReadMask = D3D12_DEFAULT_STENCIL_READ_MASK;
 	depthStencilDesc.StencilWriteMask = D3D12_DEFAULT_STENCIL_WRITE_MASK;
 	D3D12_DEPTH_STENCILOP_DESC defaultDSDesc = {};
-	defaultDSDesc
-	depthStencilDesc.FrontFace = ;
-	depthStencilDesc.BackFace = ;
-}
-
-HRESULT Material::InitPipeline(const RenderContext& context)
-{
-	HRESULT result;
-	//頂点の説明書
+	defaultDSDesc.StencilFailOp = D3D12_STENCIL_OP_KEEP;
+	defaultDSDesc.StencilDepthFailOp = D3D12_STENCIL_OP_KEEP;
+	defaultDSDesc.StencilPassOp = D3D12_STENCIL_OP_KEEP;
+	defaultDSDesc.StencilFunc = D3D12_COMPARISON_FUNC_LESS;
+	depthStencilDesc.FrontFace = defaultDSDesc;
+	depthStencilDesc.BackFace = defaultDSDesc;
+	m_GPS_DESC.DepthStencilState = depthStencilDesc;
+	//頂点レイアウト設定
 	D3D12_INPUT_ELEMENT_DESC inputElementDescs[] =
 	{
 		{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
@@ -194,8 +194,40 @@ HRESULT Material::InitPipeline(const RenderContext& context)
 		{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
 		{ "TANGENT", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
 	};
+	D3D12_INPUT_LAYOUT_DESC inputLayoutDesc = {};
+	inputLayoutDesc.pInputElementDescs = inputElementDescs;
+	inputLayoutDesc.NumElements = 4;
+	//トライアングルストリップ方式を用いるか。トライアングルリスト方式（インデックス使うやつ）ならDisableでいい
+	m_GPS_DESC.IBStripCutValue = D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED;
+	//データを頂点、辺、三角面、どうやってとらえる？
+	m_GPS_DESC.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+	//レンダーターゲット数
+	m_GPS_DESC.NumRenderTargets = 1;
+	//各レンダーターゲットの表示設定
+	m_GPS_DESC.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+	//深度ステンシルバッファーのデータフォーマット
+	m_GPS_DESC.DSVFormat = DXGI_FORMAT_D32_FLOAT;
+	//サンプリング設定
+	DXGI_SAMPLE_DESC sampleDesc = {};
+	sampleDesc.Count = 1;
+	sampleDesc.Quality = 0;
+	m_GPS_DESC.SampleDesc = sampleDesc;
+	//使用するGPUの数に応じて変動します。
+	m_GPS_DESC.NodeMask = 0;
+	//nazo
+	//m_GPS_DESC.CachedPSO 
+}
+
+HRESULT Material::InitPipeline(const RenderContext& context)
+{
+	HRESULT result;
 
 	//ルートシグネチャ設定
+	D3D12_ROOT_CONSTANTS rootConstant = {};
+
+	D3D12_ROOT_PARAMETER rootParam = {};
+	rootParam.ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+	rootParam.Constants;
 	D3D12_ROOT_SIGNATURE_DESC rootSigDesc = {};
 	rootSigDesc.NumParameters = 0;
 	rootSigDesc.pParameters = nullptr;

@@ -98,6 +98,7 @@ public:
 	void CreateVertexBuffer(const RenderContext& context, std::vector<Vertex>& vertices);
 	bool Draw(const RenderContext& context);
 	void InitTransform(const RenderContext& context);
+	void UpdateTransform();
 };
 
 //マテリアルクラス、パイプラインステートとルートシグネチャを管理するよ
