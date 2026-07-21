@@ -43,7 +43,7 @@ D3D12_GRAPHICS_PIPELINE_STATE_DESC Material::GetDefaultGPSDesc(const shaderSet& 
 #ifdef _DEBUG
 	CheckResult(result, "CompileVertexShader");
 #endif
-	if (result == S_OK) 
+	if (result == S_OK)
 	{
 		m_GPS_DESC.VS.pShaderBytecode = _vsBlob->GetBufferPointer();
 		m_GPS_DESC.VS.BytecodeLength = _vsBlob->GetBufferSize();
@@ -154,6 +154,33 @@ D3D12_GRAPHICS_PIPELINE_STATE_DESC Material::GetDefaultGPSDesc(const shaderSet& 
 	rtBlendDesc.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
 	blendDesc.RenderTarget[0] = rtBlendDesc;
 	m_GPS_DESC.BlendState = blendDesc;
+	//サンプルマスク
+	m_GPS_DESC.SampleMask = UINT_MAX;
+	//ラスタライズ設定
+	D3D12_RASTERIZER_DESC rasterizerDesc = {};
+	rasterizerDesc.FillMode = D3D12_FILL_MODE_SOLID;
+	rasterizerDesc.CullMode = D3D12_CULL_MODE_FRONT;
+	rasterizerDesc.FrontCounterClockwise = TRUE;//表面の決定方法。TRUEなら右ねじの法則
+	rasterizerDesc.DepthBias = 0;//Zファイティング対策、値が小さいほど優先して描画される(前面に描画される)
+	rasterizerDesc.DepthBiasClamp = 0.0;//深度バイアスでずらす最大値
+	rasterizerDesc.SlopeScaledDepthBias = 0.1;//光の向きに対してどれくらい斜めになっているか（スロープ）」に応じて、ズラす量を大きくするための倍率設定
+	rasterizerDesc.DepthClipEnable = TRUE;
+	rasterizerDesc.MultisampleEnable = TRUE;//D3D12_GRAPHICS_PIPELINE_STATE_DESCのなかのsampleDesc構造体によってサンプリングの設定が決まっている
+	rasterizerDesc.AntialiasedLineEnable = false;//「線分（Line）」を描画する際の専用のアンチエイリアシングを有効にするかどうかの設定
+	rasterizerDesc.ForcedSampleCount = 0;//ラスタライズ時のサンプル数を強制的に上書き指定する設定
+	rasterizerDesc.ConservativeRaster = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF;//保守的ラスタライザーを有効にするかどうか
+	m_GPS_DESC.RasterizerState = rasterizerDesc;
+	//深度ステンシル設定
+	D3D12_DEPTH_STENCIL_DESC depthStencilDesc = {};
+	depthStencilDesc.DepthEnable = TRUE;
+	depthStencilDesc.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
+	depthStencilDesc.DepthFunc = D3D12_COMPARISON_FUNC_LESS;//深度テストの合格基準
+	depthStencilDesc.StencilReadMask = D3D12_DEFAULT_STENCIL_READ_MASK;
+	depthStencilDesc.StencilWriteMask = D3D12_DEFAULT_STENCIL_WRITE_MASK;
+	D3D12_DEPTH_STENCILOP_DESC defaultDSDesc = {};
+	defaultDSDesc
+	depthStencilDesc.FrontFace = ;
+	depthStencilDesc.BackFace = ;
 }
 
 HRESULT Material::InitPipeline(const RenderContext& context)
