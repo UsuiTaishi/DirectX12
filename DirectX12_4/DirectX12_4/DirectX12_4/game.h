@@ -30,6 +30,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
 struct RenderContext {
 	ID3D12Device* device;
 	ID3D12GraphicsCommandList* cmdList;
+	ID3D12RootSignature* rootSignature;
 	DX12App* app;
 };
 
@@ -62,6 +63,7 @@ private:
 	D3D12_VIEWPORT m_viewport = {};
 	D3D12_RECT m_scissorrect = {};
 	D3D12_RESOURCE_BARRIER barrier = {};
+	Microsoft::WRL::ComPtr<ID3D12RootSignature> m_rootSignature = nullptr;
 public:
 	HRESULT Init(HWND hWnd, int width, int height);
 	RenderContext CreateRenderContext();
@@ -104,7 +106,6 @@ public:
 //マテリアルクラス、パイプラインステートとルートシグネチャを管理するよ
 class Material {
 private:
-	Microsoft::WRL::ComPtr<ID3D12RootSignature> m_rootSignature = nullptr;
 	Microsoft::WRL::ComPtr<ID3D12PipelineState> m_pipelineState = nullptr;
 	Microsoft::WRL::ComPtr<ID3DBlob> _vsBlob = nullptr;
 	Microsoft::WRL::ComPtr<ID3DBlob> _psBlob = nullptr;
@@ -125,6 +126,5 @@ private:
 	D3D12_GPU_DESCRIPTOR_HANDLE c_cbvGpuHandle = {};
 public:
 	void Init(const RenderContext& context);
-	void Update();
 	void Bind();
 };

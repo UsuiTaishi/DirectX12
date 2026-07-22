@@ -25,8 +25,6 @@ D3D12_GRAPHICS_PIPELINE_STATE_DESC Material::GetDefaultGPSDesc(const shaderSet& 
 {
 	HRESULT result;
 
-	m_GPS_DESC.pRootSignature = m_rootSignature.Get();
-
 	//シェーダーをコンパイル
 
 	result = D3DCompileFromFile(
@@ -222,30 +220,7 @@ HRESULT Material::InitPipeline(const RenderContext& context)
 {
 	HRESULT result;
 
-	//ルートシグネチャ設定
-	D3D12_ROOT_CONSTANTS rootConstant = {};
-
-	D3D12_ROOT_PARAMETER rootParam = {};
-	rootParam.ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
-	rootParam.Constants;
-	D3D12_ROOT_SIGNATURE_DESC rootSigDesc = {};
-	rootSigDesc.NumParameters = 0;
-	rootSigDesc.pParameters = nullptr;
-	rootSigDesc.NumStaticSamplers = 0;
-	rootSigDesc.pStaticSamplers = nullptr;
-	rootSigDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
-
-	ID3DBlob* serializedRootSig = nullptr;
-	result = D3D12SerializeRootSignature(&rootSigDesc, D3D_ROOT_SIGNATURE_VERSION_1, &serializedRootSig, &errorBlob);
-#ifdef _DEBUG
-	CheckResult(result, "SerializeRootSignature");
-#endif
-	result = context.device->CreateRootSignature(0, serializedRootSig->GetBufferPointer(), serializedRootSig->GetBufferSize(), IID_PPV_ARGS(&m_rootSignature));
-	serializedRootSig->Release();
-#ifdef _DEBUG
-	CheckResult(result, "CreateRootSignature");
-#endif
-
+	m_GPS_DESC.pRootSignature = context.rootSignature;
 
 	result = context.device->CreateGraphicsPipelineState(&m_GPS_DESC, IID_PPV_ARGS(&m_pipelineState));
 #ifdef _DEBUG

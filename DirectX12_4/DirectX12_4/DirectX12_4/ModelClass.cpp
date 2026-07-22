@@ -274,3 +274,8 @@ void Model::InitTransform(const RenderContext& context)
 
 	this->m_cbvGpuHandle = gpuHandle;
 }
+
+void Model::UpdateTransform()
+{
+
+}
