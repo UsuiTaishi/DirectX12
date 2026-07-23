@@ -33,11 +33,20 @@ int WINAPI	WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 	HWND hwnd = CreateGameWindow(hInstance, window_width, window_height, _T("DX12 単純ポリゴンテスト"));
 	DX12App app;
 	Model erika;
+	Material material;
 
 	app.Init(hwnd, window_width, window_height);
 	RenderContext renderContext = app.CreateRenderContext();
 
 	erika.LoadModel(renderContext, "erika.fbx");
+	erika.InitTransform(renderContext);
+
+	shaderSet shaders = {};
+	shaders.vs = L"VertexShader.hlsl";
+	shaders.ps = L"PixelShader.hlsl";
+	material.GetDefaultGPSDesc(shaders);
+	material.InitPipeline(renderContext);
+
 
 
 	ShowWindow(hwnd, SW_SHOW);
@@ -53,9 +62,9 @@ int WINAPI	WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 		else
 		{
 			app.BeginFrame();
-
+			erika.RotationY();
 			//ここにモデルを描きこむ処理を
-
+			material.SetPipelineState(renderContext);
 			erika.Draw(renderContext);
 
 			app.EndFrame();

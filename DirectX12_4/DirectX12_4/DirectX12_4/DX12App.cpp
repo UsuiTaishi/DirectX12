@@ -23,6 +23,7 @@
 using namespace std;
 using namespace DirectX;
 
+
 HRESULT DX12App::Init(HWND hWnd, int width, int height)
 //処理
 {
@@ -32,19 +33,19 @@ HRESULT DX12App::Init(HWND hWnd, int width, int height)
 #ifdef _DEBUG
 	CheckResult(result, "CreateDXGIFactory2");
 #endif
-	vector<IDXGIAdapter*> adapters;
-	IDXGIAdapter* tmpAdapter = nullptr;//これから配列に入るやつに仮で名前を与える。forで回すため
+	vector<Microsoft::WRL::ComPtr<IDXGIAdapter>> adapters;
+	Microsoft::WRL::ComPtr<IDXGIAdapter> tmpAdapter = nullptr;//これから配列に入るやつに仮で名前を与える。forで回すため
 	for (int i = 0; m_dxgiFactory->EnumAdapters(i, &tmpAdapter) != DXGI_ERROR_NOT_FOUND; ++i)//インデックス番号とグラボのデータのアドレス
 	{
 		adapters.push_back(tmpAdapter);//さっき作った可変長配列の後ろにtmpAdapterをぶち込む
 	}
 	//IDXGIAdapter型のポインタ配列adaptersが完成
-	for (auto adpt : adapters)//全ビデオカードに対し
+	for (const auto& adpt : adapters)//全ビデオカードに対し
 	{
 		DXGI_ADAPTER_DESC desc = {};
 		adpt->GetDesc(&desc);//ビデオカードの情報を取得
 		wstring strDesc = desc.Description;//strDescの中にこの１ループ内で取得したビデオカードの名前が入る
-		if (strDesc.find(L"NVIDIA") != string::npos)
+		if (strDesc.find(L"NVIDIA") != wstring::npos)
 		{
 			tmpAdapter = adpt;
 			break;
@@ -58,7 +59,7 @@ HRESULT DX12App::Init(HWND hWnd, int width, int height)
 	bool deviceCreated = false;
 	for (auto lv : levels)
 	{
-		result = D3D12CreateDevice(tmpAdapter, lv, IID_PPV_ARGS(&m_dev));
+		result = D3D12CreateDevice(tmpAdapter.Get(), lv, IID_PPV_ARGS(&m_dev));
 		if (SUCCEEDED(result))
 		{
 			deviceCreated = true;
@@ -69,9 +70,6 @@ HRESULT DX12App::Init(HWND hWnd, int width, int height)
 	CheckResult(result, "D3D12CreateDevice");
 #endif
 	if (!deviceCreated) return E_FAIL;
-
-	for (auto adpt : adapters) { if (adpt != tmpAdapter) adpt->Release(); }
-	if (tmpAdapter) tmpAdapter->Release();
 
 	//描画用のコマンドアロケーターを作る
 	for (int i = 0; i < 2; ++i)
@@ -113,13 +111,12 @@ HRESULT DX12App::Init(HWND hWnd, int width, int height)
 	m_swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
 	m_swapChainDesc.AlphaMode = DXGI_ALPHA_MODE_IGNORE;
 	m_swapChainDesc.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
-	IDXGISwapChain1* sc1 = nullptr;
+	Microsoft::WRL::ComPtr<IDXGISwapChain1> sc1 = nullptr;
 	result = m_dxgiFactory->CreateSwapChainForHwnd(m_cmdQueue.Get(), hWnd, &m_swapChainDesc, nullptr, nullptr, &sc1);
 #ifdef _DEBUG
 	CheckResult(result, "CreateSwapChainForHwnd");
 #endif
 	result = sc1->QueryInterface(IID_PPV_ARGS(&m_swapChain));//格納するアドレスをクラスのメンバ変数のものにするよ
-	sc1->Release();
 
 	//バックバッファー用のレンダーターゲットビューのディスクリプタヒープを作る
 	D3D12_DESCRIPTOR_HEAP_DESC _rtvHeapDesc = {};
@@ -239,6 +236,72 @@ HRESULT DX12App::Init(HWND hWnd, int width, int height)
 	m_scissorrect.left = 0;
 	m_scissorrect.right = 800;
 	m_scissorrect.bottom = 600;
+
+	//ルートシグネチャを設定
+	D3D12_ROOT_PARAMETER rootparams[3] = {};
+	//カメラ用のルートパラメーター
+	rootparams[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+	rootparams[0].Descriptor.ShaderRegister = 0;//レジスタのb0
+	rootparams[0].Descriptor.RegisterSpace = 0;
+	rootparams[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
+	//オブジェクト用の定数バッファ　ヒープを経由せずに直接送る
+	rootparams[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+	rootparams[1].Descriptor.ShaderRegister = 1;//レジスタのb1
+	rootparams[1].Descriptor.RegisterSpace = 0;
+	rootparams[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;//座標変換は頂点シェーダーで行う
+
+	//テクスチャ
+	D3D12_DESCRIPTOR_RANGE srvRange = {};
+	srvRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+	srvRange.NumDescriptors = 1;//使うテクスチャの数
+	srvRange.BaseShaderRegister = 0;//レジスターt0
+	srvRange.RegisterSpace = 0;
+	srvRange.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+	rootparams[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+	rootparams[2].DescriptorTable.NumDescriptorRanges = 1;
+	rootparams[2].DescriptorTable.pDescriptorRanges = &srvRange;
+	rootparams[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+	//サンプラーの設定
+	D3D12_STATIC_SAMPLER_DESC samplerDesc = {};
+	samplerDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+	samplerDesc.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+	samplerDesc.AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+	samplerDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+	samplerDesc.MipLODBias = 0;
+	samplerDesc.MaxAnisotropy = 0;
+	samplerDesc.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
+	samplerDesc.BorderColor = D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK;
+	samplerDesc.MinLOD = 0.0f;
+	samplerDesc.MaxLOD = D3D12_FLOAT32_MAX;
+	samplerDesc.ShaderRegister = 0; // HLSLの register(s0)
+	samplerDesc.RegisterSpace = 0;
+	samplerDesc.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+
+	//ルートシグネチャ設定
+	D3D12_ROOT_SIGNATURE_DESC rootSigDesc = {};
+	rootSigDesc.NumParameters = _countof(rootparams);
+	rootSigDesc.pParameters = rootparams;
+	rootSigDesc.NumStaticSamplers = 1;
+	rootSigDesc.pStaticSamplers = &samplerDesc;
+	rootSigDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
+	//ルートシグネチャのバイナリコードを生成
+	ID3DBlob* rootSigBlob = nullptr;
+	ID3DBlob* errorBlob = nullptr;
+	result = D3D12SerializeRootSignature
+	(
+		&rootSigDesc,
+		D3D_ROOT_SIGNATURE_VERSION_1_0,
+		&rootSigBlob,
+		&errorBlob
+	);
+#ifdef _DEBUG
+	CheckResult(result, "TranslateRootSignature");
+#endif
+	//ルートシグネチャのレイアウトを作成
+	result = m_dev->CreateRootSignature(0, rootSigBlob->GetBufferPointer(), rootSigBlob->GetBufferSize(), IID_PPV_ARGS(&m_rootSignature));
+#ifdef _DEBUG
+	CheckResult(result, "TranslateRootSignature");
+#endif
 	return S_OK;
 }
 
@@ -247,6 +310,7 @@ RenderContext DX12App::CreateRenderContext()
 	RenderContext rContext = {};
 	rContext.device = m_dev.Get();
 	rContext.cmdList = m_cmdList.Get();
+	rContext.rootSignature = m_rootSignature.Get();
 	rContext.app = this;
 	return rContext;
 }
@@ -278,11 +342,7 @@ void DX12App::BeginFrame()
 	m_cmdList->RSSetViewports(1, &m_viewport);
 	m_cmdList->RSSetScissorRects(1, &m_scissorrect);
 
-	//m_cmdList->SetGraphicsRootSignature(m_rootSignature.Get());
-	//m_cmdList->SetPipelineState(m_pipelineState.Get());
-
-	ID3D12DescriptorHeap* ppHeaps[] = { m_srvHeap.Get() };
-	m_cmdList->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
+	
 
 	barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
 	barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
@@ -300,9 +360,13 @@ void DX12App::BeginFrame()
 
 	m_cmdList->OMSetRenderTargets(1, &rtvHandle, FALSE, &dsvHandle);
 
-	float clearColor[] = { 0.4f, 0.6f, 0.9f, 1.0f };
+	float clearColor[] = { 1.0f, 0.0f, 0.9f, 1.0f };
 	m_cmdList->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);//RTVのクリア処理。これをやらないと残像が黒くなって現れる場合がある。
 	m_cmdList->ClearDepthStencilView(dsvHandle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
+
+	ID3D12DescriptorHeap* ppHeaps[] = { m_srvHeap.Get() };
+	m_cmdList->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
+	m_cmdList->SetGraphicsRootSignature(m_rootSignature.Get());
 }
 
 void DX12App::EndFrame()

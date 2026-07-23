@@ -26,6 +26,8 @@ void OnDestroy();
 
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
 
+class DX12App;
+
 //描画に必要なインフラをまとめる構造体、モデルクラスとかに渡す
 struct RenderContext {
 	ID3D12Device* device;
@@ -93,14 +95,14 @@ private:
 	std::vector<Vertex> m_mVertexData;
 	};
 	std::vector<MeshData> m_meshes;//マテリアルごとに分離したメッシュの配列
-	DirectX::XMMATRIX matrix;
+	DirectX::XMMATRIX matrix = DirectX::XMMatrixIdentity();
 public:
 	bool LoadModel(const RenderContext& context, const std::string& filename);
 	void LoadMesh(fbxsdk::FbxMesh* mesh);
 	void CreateVertexBuffer(const RenderContext& context, std::vector<Vertex>& vertices);
 	bool Draw(const RenderContext& context);
 	void InitTransform(const RenderContext& context);
-	void UpdateTransform();
+	void RotationY();
 };
 
 //マテリアルクラス、パイプラインステートとルートシグネチャを管理するよ
@@ -115,8 +117,9 @@ private:
 	Microsoft::WRL::ComPtr<ID3DBlob> errorBlob = nullptr;
 	D3D12_GRAPHICS_PIPELINE_STATE_DESC m_GPS_DESC = {};
 public:
-	D3D12_GRAPHICS_PIPELINE_STATE_DESC GetDefaultGPSDesc(const shaderSet& shaders);
-	HRESULT InitPipeline(const RenderContext& context);
+	void GetDefaultGPSDesc(const shaderSet& shaders);
+	void InitPipeline(const RenderContext& context);
+	void SetPipelineState(const RenderContext& context);
 };
 
 class Camera {
@@ -126,5 +129,4 @@ private:
 	D3D12_GPU_DESCRIPTOR_HANDLE c_cbvGpuHandle = {};
 public:
 	void Init(const RenderContext& context);
-	void Bind();
 };

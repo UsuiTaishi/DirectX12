@@ -213,16 +213,6 @@ void Model::CreateVertexBuffer(const RenderContext& context, std::vector<Vertex>
 	m_vbView.StrideInBytes = sizeof(Vertex);
 }
 
-bool Model::Draw(const RenderContext& context)
-{
-	context.cmdList->IASetVertexBuffers(0, 1, &m_vbView);
-	context.cmdList->SetGraphicsRootDescriptorTable(0, m_cbvGpuHandle);
-	context.cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-	context.cmdList->DrawInstanced(allVertexCount, 1, 0, 0);
-
-	return true;
-}
-
 void Model::InitTransform(const RenderContext& context)
 {
 	HRESULT result;
@@ -240,6 +230,7 @@ void Model::InitTransform(const RenderContext& context)
 	constResourceDesc.Width = (sizeof(matrix) + 255) & ~255;//定数バッファーはメモリサイズが256のサイズでないといけない
 	constResourceDesc.Height = 1;
 	constResourceDesc.DepthOrArraySize = 1;
+	constResourceDesc.MipLevels = 1;
 	constResourceDesc.Format = DXGI_FORMAT_UNKNOWN;
 	constResourceDesc.SampleDesc.Count = 1;
 	constResourceDesc.SampleDesc.Quality = 0;
@@ -265,8 +256,8 @@ void Model::InitTransform(const RenderContext& context)
 	D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle;
 	D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle;
 
-	context.app->AllocateDescriptor(cpuHandle, gpuHandle);
-
+	context.app->AllocateDescriptor(cpuHandle, gpuHandle);//空いてるメモリの先っぽを取得する
+	//ディスクリプターつくって更新したハンドルを起点にしてぶち込む
 	D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {};
 	cbvDesc.BufferLocation = m_constantBuffer->GetGPUVirtualAddress();//リソース本体の仮想アドレスが欲しい
 	cbvDesc.SizeInBytes = (sizeof(matrix) + 255) & ~255;
@@ -275,7 +266,25 @@ void Model::InitTransform(const RenderContext& context)
 	this->m_cbvGpuHandle = gpuHandle;
 }
 
-void Model::UpdateTransform()
+void Model::RotationY()
 {
+	static float angle = 0.0f;
+	angle += 0.01f;
+	matrix = XMMatrixRotationY(angle);
 
+	void* pMapMatrix = nullptr;
+	m_constantBuffer->Map(0, nullptr, &pMapMatrix);
+	XMMATRIX* pMatrixData = static_cast<XMMATRIX*>(pMapMatrix);
+	*pMatrixData = matrix;
+	m_constantBuffer->Unmap(0, nullptr);
+}
+
+bool Model::Draw(const RenderContext& context)
+{
+	context.cmdList->IASetVertexBuffers(0, 1, &m_vbView);
+	context.cmdList->SetGraphicsRootConstantBufferView(0, m_constantBuffer->GetGPUVirtualAddress());
+	context.cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	context.cmdList->DrawInstanced(allVertexCount, 1, 0, 0);
+
+	return true;
 }

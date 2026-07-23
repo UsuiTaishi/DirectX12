@@ -21,7 +21,7 @@
 #pragma comment(lib,"d3dcompiler.lib")
 
 //デフォルト設定のD3D12_GRAPHICS_PIPELINE_STATE_DESCを作る
-D3D12_GRAPHICS_PIPELINE_STATE_DESC Material::GetDefaultGPSDesc(const shaderSet& shaders)
+void Material::GetDefaultGPSDesc(const shaderSet& shaders)
 {
 	HRESULT result;
 
@@ -185,7 +185,7 @@ D3D12_GRAPHICS_PIPELINE_STATE_DESC Material::GetDefaultGPSDesc(const shaderSet& 
 	depthStencilDesc.BackFace = defaultDSDesc;
 	m_GPS_DESC.DepthStencilState = depthStencilDesc;
 	//頂点レイアウト設定
-	D3D12_INPUT_ELEMENT_DESC inputElementDescs[] =
+	static D3D12_INPUT_ELEMENT_DESC inputElementDescs[] =
 	{
 		{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
 		{ "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
@@ -195,6 +195,7 @@ D3D12_GRAPHICS_PIPELINE_STATE_DESC Material::GetDefaultGPSDesc(const shaderSet& 
 	D3D12_INPUT_LAYOUT_DESC inputLayoutDesc = {};
 	inputLayoutDesc.pInputElementDescs = inputElementDescs;
 	inputLayoutDesc.NumElements = 4;
+	m_GPS_DESC.InputLayout = inputLayoutDesc;
 	//トライアングルストリップ方式を用いるか。トライアングルリスト方式（インデックス使うやつ）ならDisableでいい
 	m_GPS_DESC.IBStripCutValue = D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED;
 	//データを頂点、辺、三角面、どうやってとらえる？
@@ -216,7 +217,7 @@ D3D12_GRAPHICS_PIPELINE_STATE_DESC Material::GetDefaultGPSDesc(const shaderSet& 
 	//m_GPS_DESC.CachedPSO 
 }
 
-HRESULT Material::InitPipeline(const RenderContext& context)
+void Material::InitPipeline(const RenderContext& context)
 {
 	HRESULT result;
 
@@ -226,5 +227,9 @@ HRESULT Material::InitPipeline(const RenderContext& context)
 #ifdef _DEBUG
 	CheckResult(result, "CreateGraphicsPipelineState");
 #endif
-	return S_OK;
+}
+
+void Material::SetPipelineState(const RenderContext& context)
+{
+	context.cmdList->SetPipelineState(m_pipelineState.Get());
 }
