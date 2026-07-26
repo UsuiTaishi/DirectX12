@@ -137,7 +137,7 @@
     <ClCompile Include="OpenWindow.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="game.h" />
+    <ClInclude Include="renderer.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="..\..\..\..\..\Erika\erika.fbx" />

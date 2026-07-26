@@ -6,7 +6,7 @@
 #include <vector>
 #include <d3dcompiler.h>
 //#include<DirectXTex.h>
-#include "game.h"
+#include "renderer.h"
 
 #ifdef _DEBUG
 #include <iostream>
@@ -34,6 +34,7 @@ int WINAPI	WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 	DX12App app;
 	Model erika;
 	Material material;
+	Camera camera;
 
 	app.Init(hwnd, window_width, window_height);
 	RenderContext renderContext = app.CreateRenderContext();
@@ -46,6 +47,8 @@ int WINAPI	WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 	shaders.ps = L"PixelShader.hlsl";
 	material.GetDefaultGPSDesc(shaders);
 	material.InitPipeline(renderContext);
+
+	camera.Init(renderContext);
 
 
 
@@ -62,11 +65,13 @@ int WINAPI	WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 		else
 		{
 			app.BeginFrame();
-			erika.RotationY();
-			//‚±‚±‚Éƒ‚ƒfƒ‹‚ğ•`‚«‚±‚Şˆ—‚ğ
+			//‚±‚±‚É
+			// ‚©‚çƒ‚ƒfƒ‹‚ğ•`‚«‚±‚Şˆ—‚ğ
+			erika.UpdateTransform();
+			camera.SetCamera(renderContext, window_width, window_height);
 			material.SetPipelineState(renderContext);
 			erika.Draw(renderContext);
-
+			//‚±‚±‚Ü‚Å•`‚«‚±‚Şˆ—
 			app.EndFrame();
 		}
 	}

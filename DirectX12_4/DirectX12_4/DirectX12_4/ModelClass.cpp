@@ -5,7 +5,7 @@
 #include <dxgi1_6.h>
 #include <vector>
 #include <d3dcompiler.h>
-#include"game.h"
+#include"renderer.h"
 #include<cassert>
 
 #ifdef _DEBUG
@@ -227,7 +227,7 @@ void Model::InitTransform(const RenderContext& context)
 
 	constResourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
 	constResourceDesc.Alignment = 0;
-	constResourceDesc.Width = (sizeof(matrix) + 255) & ~255;//定数バッファーはメモリサイズが256のサイズでないといけない
+	constResourceDesc.Width = (sizeof(worldMatrix) + 255) & ~255;//定数バッファーはメモリサイズが256のサイズでないといけない
 	constResourceDesc.Height = 1;
 	constResourceDesc.DepthOrArraySize = 1;
 	constResourceDesc.MipLevels = 1;
@@ -246,12 +246,12 @@ void Model::InitTransform(const RenderContext& context)
 		IID_PPV_ARGS(m_constantBuffer.GetAddressOf())
 	);
 #ifdef _DEBUG
-	CheckResult(result, "CommittedConstResources");
+	CheckResult(result, "CommittedConstResourcesV");
 #endif
 	void* pMapMatrix = nullptr;
 	m_constantBuffer->Map(0, nullptr, &pMapMatrix);
 	XMMATRIX* pMatrixData = static_cast<XMMATRIX*>(pMapMatrix);
-	*pMatrixData = matrix;
+	*pMatrixData = worldMatrix;
 
 	D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle;
 	D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle;
@@ -260,29 +260,27 @@ void Model::InitTransform(const RenderContext& context)
 	//ディスクリプターつくって更新したハンドルを起点にしてぶち込む
 	D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {};
 	cbvDesc.BufferLocation = m_constantBuffer->GetGPUVirtualAddress();//リソース本体の仮想アドレスが欲しい
-	cbvDesc.SizeInBytes = (sizeof(matrix) + 255) & ~255;
+	cbvDesc.SizeInBytes = (sizeof(worldMatrix) + 255) & ~255;
 	context.device->CreateConstantBufferView(&cbvDesc, cpuHandle);
 
 	this->m_cbvGpuHandle = gpuHandle;
 }
 
-void Model::RotationY()
+void Model::UpdateTransform()
 {
-	static float angle = 0.0f;
-	angle += 0.01f;
-	matrix = XMMatrixRotationY(angle);
+	worldMatrix = XMMatrixRotationX(XM_PIDIV2);
 
 	void* pMapMatrix = nullptr;
 	m_constantBuffer->Map(0, nullptr, &pMapMatrix);
 	XMMATRIX* pMatrixData = static_cast<XMMATRIX*>(pMapMatrix);
-	*pMatrixData = matrix;
+	*pMatrixData = worldMatrix;
 	m_constantBuffer->Unmap(0, nullptr);
 }
 
 bool Model::Draw(const RenderContext& context)
 {
 	context.cmdList->IASetVertexBuffers(0, 1, &m_vbView);
-	context.cmdList->SetGraphicsRootConstantBufferView(0, m_constantBuffer->GetGPUVirtualAddress());
+	context.cmdList->SetGraphicsRootConstantBufferView(1, m_constantBuffer->GetGPUVirtualAddress());//レジスター1に登録
 	context.cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 	context.cmdList->DrawInstanced(allVertexCount, 1, 0, 0);
 

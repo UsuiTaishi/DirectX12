@@ -95,17 +95,17 @@ private:
 	std::vector<Vertex> m_mVertexData;
 	};
 	std::vector<MeshData> m_meshes;//マテリアルごとに分離したメッシュの配列
-	DirectX::XMMATRIX matrix = DirectX::XMMatrixIdentity();
+	DirectX::XMMATRIX worldMatrix = DirectX::XMMatrixIdentity();//ワールド行列
 public:
 	bool LoadModel(const RenderContext& context, const std::string& filename);
 	void LoadMesh(fbxsdk::FbxMesh* mesh);
 	void CreateVertexBuffer(const RenderContext& context, std::vector<Vertex>& vertices);
 	bool Draw(const RenderContext& context);
 	void InitTransform(const RenderContext& context);
-	void RotationY();
+	void UpdateTransform();
 };
 
-//マテリアルクラス、パイプラインステートとルートシグネチャを管理するよ
+//マテリアルクラス、パイプラインステートを管理
 class Material {
 private:
 	Microsoft::WRL::ComPtr<ID3D12PipelineState> m_pipelineState = nullptr;
@@ -124,9 +124,12 @@ public:
 
 class Camera {
 private:
-	DirectX::XMMATRIX matrix;
+	DirectX::XMMATRIX viewMatrix = DirectX::XMMatrixIdentity();//カメラの位置は移動させるのでメンバ変数に設定
+	DirectX::XMMATRIX projectionMatrix = DirectX::XMMatrixIdentity();
+	DirectX::XMMATRIX matrix = DirectX::XMMatrixIdentity();
 	Microsoft::WRL::ComPtr<ID3D12Resource> c_constantBuffer = nullptr;
 	D3D12_GPU_DESCRIPTOR_HANDLE c_cbvGpuHandle = {};
 public:
 	void Init(const RenderContext& context);
+	void SetCamera(const RenderContext& context, int width, int height);
 };

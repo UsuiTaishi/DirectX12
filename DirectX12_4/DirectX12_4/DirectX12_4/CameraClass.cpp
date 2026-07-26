@@ -5,7 +5,7 @@
 #include <dxgi1_6.h>
 #include <vector>
 #include <d3dcompiler.h>
-#include"game.h"
+#include"renderer.h"
 #include<cassert>
 
 #ifdef _DEBUG
@@ -40,6 +40,7 @@ void Camera::Init(const RenderContext& context)
 	constResourceDesc.Width = (sizeof(matrix) + 255) & ~255;//定数バッファーはメモリサイズが256のサイズでないといけない
 	constResourceDesc.Height = 1;
 	constResourceDesc.DepthOrArraySize = 1;
+	constResourceDesc.MipLevels = 1;
 	constResourceDesc.Format = DXGI_FORMAT_UNKNOWN;
 	constResourceDesc.SampleDesc.Count = 1;
 	constResourceDesc.SampleDesc.Quality = 0;
@@ -55,7 +56,7 @@ void Camera::Init(const RenderContext& context)
 		IID_PPV_ARGS(c_constantBuffer.GetAddressOf())
 	);
 #ifdef _DEBUG
-	CheckResult(result, "CommittedConstResources");
+	CheckResult(result, "CommittedConstResourcesMVP");
 #endif
 	void* pMapMatrix = nullptr;
 	c_constantBuffer->Map(0, nullptr, &pMapMatrix);
@@ -68,10 +69,36 @@ void Camera::Init(const RenderContext& context)
 	context.app->AllocateDescriptor(cpuHandle, gpuHandle);
 
 	D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {};
-	cbvDesc.BufferLocation = c_constantBuffer->GetGPUVirtualAddress();//リソース本体の仮想アドレスが欲しい
+	cbvDesc.BufferLocation = c_constantBuffer->GetGPUVirtualAddress();//リソース本体のCPU仮想アドレスが欲しい1
 	cbvDesc.SizeInBytes = (sizeof(matrix) + 255) & ~255;
 	context.device->CreateConstantBufferView(&cbvDesc, cpuHandle);
 
 	this->c_cbvGpuHandle = gpuHandle;
 }
 
+void Camera::SetCamera(const RenderContext& context, int width, int height)
+{
+	//ビュー行列
+	XMFLOAT3 cameraPos(0, 0, -5);
+	XMFLOAT3 interestPoint(0, 0, 0);
+	XMFLOAT3 upVector(0, 1, 0);
+	viewMatrix = XMMatrixLookAtLH(XMLoadFloat3(&cameraPos), XMLoadFloat3(&interestPoint), XMLoadFloat3(&upVector));
+	//プロジェクション行列
+	float angleView = XM_PIDIV4;//垂直画角
+	float aspect = static_cast<float>(width) / static_cast<float>(height);//アスペクト比
+	float nearestClipping = 1.0f;//近いクリッピング面までの距離
+	float furthestClipping = 10.0f;//遠いクリッピング面までの距離
+	projectionMatrix = XMMatrixPerspectiveFovLH(angleView, aspect, nearestClipping, furthestClipping);
+
+	matrix = viewMatrix * projectionMatrix;
+
+	//マッピング処理
+	void* pMapMatrix = nullptr;
+	c_constantBuffer->Map(0, nullptr, &pMapMatrix);
+	XMMATRIX* pMatrixData = static_cast<XMMATRIX*>(pMapMatrix);
+	*pMatrixData = matrix;
+	c_constantBuffer->Unmap(0, nullptr);
+
+	//バインド
+	context.cmdList->SetGraphicsRootConstantBufferView(0, c_constantBuffer->GetGPUVirtualAddress());
+}

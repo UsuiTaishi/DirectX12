@@ -5,7 +5,7 @@
 #include <dxgi1_6.h>
 #include <vector>
 #include <d3dcompiler.h>
-#include"game.h"
+#include"renderer.h"
 #include<cassert>
 
 #ifdef _DEBUG

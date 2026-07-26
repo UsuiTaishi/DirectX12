@@ -2,7 +2,7 @@
 #include <tchar.h>
 #include<string>
 #include <vector>
-#include"game.h"
+#include"renderer.h"
 #include<cassert>
 
 #ifdef _DEBUG

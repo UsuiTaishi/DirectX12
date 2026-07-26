@@ -5,7 +5,7 @@
 #include <dxgi1_6.h>
 #include <vector>
 #include <d3dcompiler.h>
-#include"game.h"
+#include"renderer.h"
 #include<cassert>
 
 #ifdef _DEBUG
@@ -157,7 +157,7 @@ void Material::GetDefaultGPSDesc(const shaderSet& shaders)
 	//ラスタライズ設定
 	D3D12_RASTERIZER_DESC rasterizerDesc = {};
 	rasterizerDesc.FillMode = D3D12_FILL_MODE_SOLID;
-	rasterizerDesc.CullMode = D3D12_CULL_MODE_FRONT;
+	rasterizerDesc.CullMode = D3D12_CULL_MODE_BACK;
 	rasterizerDesc.FrontCounterClockwise = TRUE;//表面の決定方法。TRUEなら右ねじの法則
 	rasterizerDesc.DepthBias = 0;//Zファイティング対策、値が小さいほど優先して描画される(前面に描画される)
 	rasterizerDesc.DepthBiasClamp = 0.0;//深度バイアスでずらす最大値
