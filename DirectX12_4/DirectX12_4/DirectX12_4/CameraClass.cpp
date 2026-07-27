@@ -79,9 +79,6 @@ void Camera::Init(const RenderContext& context)
 void Camera::SetCamera(const RenderContext& context, int width, int height)
 {
 	//ビュー行列
-	XMFLOAT3 cameraPos(0, 0, -5);
-	XMFLOAT3 interestPoint(0, 0, 0);
-	XMFLOAT3 upVector(0, 1, 0);
 	viewMatrix = XMMatrixLookAtLH(XMLoadFloat3(&cameraPos), XMLoadFloat3(&interestPoint), XMLoadFloat3(&upVector));
 	//プロジェクション行列
 	float angleView = XM_PIDIV4;//垂直画角

@@ -141,6 +141,7 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="..\..\..\..\..\Erika\erika.fbx" />
+    <None Include="..\..\..\..\..\Users\usui0\Documents\monkey.fbx" />
     <None Include="shader_header.hlsli" />
   </ItemGroup>
   <ItemGroup>

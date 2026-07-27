@@ -39,7 +39,7 @@ int WINAPI	WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 	app.Init(hwnd, window_width, window_height);
 	RenderContext renderContext = app.CreateRenderContext();
 
-	erika.LoadModel(renderContext, "erika.fbx");
+	erika.LoadModel(renderContext, "monkey.fbx");
 	erika.InitTransform(renderContext);
 
 	shaderSet shaders = {};

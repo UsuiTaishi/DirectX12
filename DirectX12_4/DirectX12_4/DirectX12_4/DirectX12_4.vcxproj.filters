@@ -46,6 +46,9 @@
     <None Include="..\..\..\..\..\Erika\erika.fbx">
       <Filter>リソース ファイル</Filter>
     </None>
+    <None Include="..\..\..\..\..\Users\usui0\Documents\monkey.fbx">
+      <Filter>リソース ファイル</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="VertexShader.hlsl">

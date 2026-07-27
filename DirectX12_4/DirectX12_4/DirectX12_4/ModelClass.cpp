@@ -269,6 +269,9 @@ void Model::InitTransform(const RenderContext& context)
 void Model::UpdateTransform()
 {
 	worldMatrix = XMMatrixRotationX(XM_PIDIV2);
+	static float angle = 0.0f;
+	worldMatrix = XMMatrixRotationX(angle);
+	angle += 0.001;
 
 	void* pMapMatrix = nullptr;
 	m_constantBuffer->Map(0, nullptr, &pMapMatrix);
@@ -281,7 +284,8 @@ bool Model::Draw(const RenderContext& context)
 {
 	context.cmdList->IASetVertexBuffers(0, 1, &m_vbView);
 	context.cmdList->SetGraphicsRootConstantBufferView(1, m_constantBuffer->GetGPUVirtualAddress());//ƒŒƒWƒXƒ^[1‚É“o˜^
-	context.cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	//context.cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	context.cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_POINTLIST);
 	context.cmdList->DrawInstanced(allVertexCount, 1, 0, 0);
 
 	return true;

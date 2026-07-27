@@ -127,6 +127,9 @@ private:
 	DirectX::XMMATRIX viewMatrix = DirectX::XMMatrixIdentity();//ƒJƒƒ‰‚ÌˆÊ’u‚ÍˆÚ“®‚³‚¹‚é‚Ì‚Åƒƒ“ƒo•Ï”‚Éİ’è
 	DirectX::XMMATRIX projectionMatrix = DirectX::XMMatrixIdentity();
 	DirectX::XMMATRIX matrix = DirectX::XMMatrixIdentity();
+	DirectX::XMFLOAT3 cameraPos = {0, 0, -3};
+	DirectX::XMFLOAT3 interestPoint = { 0, 0, 0 };
+	DirectX::XMFLOAT3 upVector = { 0, 1, 0 };
 	Microsoft::WRL::ComPtr<ID3D12Resource> c_constantBuffer = nullptr;
 	D3D12_GPU_DESCRIPTOR_HANDLE c_cbvGpuHandle = {};
 public:
