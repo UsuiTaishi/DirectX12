@@ -160,6 +160,8 @@ void Model::LoadMesh(FbxMesh* mesh)
 		data.m_mVertexData[i].Tangent[2] = static_cast<float>(tangent[i][2]);
 	}
 	m_meshes.push_back(data);
+
+	//重複のない頂点データ配列を作る。
 }
 
 void Model::CreateVertexBuffer(const RenderContext& context, std::vector<Vertex>& vertices)
@@ -211,6 +213,22 @@ void Model::CreateVertexBuffer(const RenderContext& context, std::vector<Vertex>
 	m_vbView.BufferLocation = m_vertexBuffer->GetGPUVirtualAddress();
 	m_vbView.SizeInBytes = sizeof(Vertex) * vertices.size();
 	m_vbView.StrideInBytes = sizeof(Vertex);
+}
+
+void Model::CreateIndexBuffer(const RenderContext& context, std::vector<UINT32> index)
+{
+	HRESULT result;
+	D3D12_RESOURCE_DESC indexResourceDesc = {};
+	indexResourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+	indexResourceDesc.Width = sizeof(UINT32) * index.size();
+	indexResourceDesc.Height = 1;
+	indexResourceDesc.DepthOrArraySize = 1;
+	indexResourceDesc.MipLevels = 1;
+	indexResourceDesc.Format = DXGI_FORMAT_UNKNOWN;
+	indexResourceDesc.SampleDesc.Count = 1;
+	indexResourceDesc.SampleDesc.Quality = 0;
+	indexResourceDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+	indexResourceDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
 }
 
 void Model::InitTransform(const RenderContext& context)
@@ -284,8 +302,8 @@ bool Model::Draw(const RenderContext& context)
 {
 	context.cmdList->IASetVertexBuffers(0, 1, &m_vbView);
 	context.cmdList->SetGraphicsRootConstantBufferView(1, m_constantBuffer->GetGPUVirtualAddress());//レジスター1に登録
-	//context.cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-	context.cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_POINTLIST);
+	context.cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	//context.cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_POINTLIST);
 	context.cmdList->DrawInstanced(allVertexCount, 1, 0, 0);
 
 	return true;

@@ -8,7 +8,6 @@
 #include<vector>
 #include<map>
 #include<wrl/client.h>
-#include<DirectXMath.h>
 
 // すべて中身は書かずに、末尾をセミコロン「;」で終わらせる形にします
 
@@ -83,9 +82,32 @@ private:
 		float Normal[3];
 		float UV[2];
 		float Tangent[3];
+		
+		//イコール判定の定義
+		bool operator==(const Vertex& other)const
+		{
+			for (int i = 0; i < 3; i++)
+			{
+				if (Position[i] != other.Position[i])return false;
+			}
+			for (int i = 0; i < 3; i++)
+			{
+				if (Normal[i] != other.Normal[i])return false;
+			}
+			for (int i = 0; i < 2; i++)
+			{
+				if (UV[i] != other.UV[i])return false;
+			}
+			for (int i = 0; i < 3; i++)
+			{
+				if (Tangent[i] != other.Tangent[i])return false;
+			}
+			return true;
+		}
 	};
 	Microsoft::WRL::ComPtr<ID3D12Resource> m_vertexBuffer = nullptr;
-	Microsoft::WRL::ComPtr<ID3D12Resource> m_constantBuffer = nullptr;
+	Microsoft::WRL::ComPtr<ID3D12Resource> m_indexBuffer = nullptr;
+	Microsoft::WRL::ComPtr<ID3D12Resource> m_constantBuffer = nullptr;//ワールドマトリックス
 	D3D12_GPU_DESCRIPTOR_HANDLE m_cbvGpuHandle = {};
 	UINT allVertexCount = 0;
 	D3D12_VERTEX_BUFFER_VIEW m_vbView = {};
@@ -93,13 +115,15 @@ private:
 	{
 	std::string materialName;
 	std::vector<Vertex> m_mVertexData;
+	std::vector<UINT32> m_index;
 	};
-	std::vector<MeshData> m_meshes;//マテリアルごとに分離したメッシュの配列
+	std::vector<MeshData> m_meshes;//マテリアルごとに分離したメッシュデータの配列
 	DirectX::XMMATRIX worldMatrix = DirectX::XMMatrixIdentity();//ワールド行列
 public:
 	bool LoadModel(const RenderContext& context, const std::string& filename);
 	void LoadMesh(fbxsdk::FbxMesh* mesh);
 	void CreateVertexBuffer(const RenderContext& context, std::vector<Vertex>& vertices);
+	void CreateIndexBuffer(const RenderContext& context, std::vector<UINT32> index);
 	bool Draw(const RenderContext& context);
 	void InitTransform(const RenderContext& context);
 	void UpdateTransform();
