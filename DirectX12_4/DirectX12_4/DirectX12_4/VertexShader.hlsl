@@ -23,5 +23,4 @@ Output vsMain(
     float4 worldNorm = mul(normal, WorldMat);
     output.normal = mul(worldNorm, VPmatrix);
     return output;
-    
 } 

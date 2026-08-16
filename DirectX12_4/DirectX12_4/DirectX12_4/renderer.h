@@ -23,6 +23,8 @@ void OnClose(HWND hWnd);
 
 void OnDestroy();
 
+std::wstring ConvertWString(std::string& str);
+
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
 
 class DX12App;
@@ -74,10 +76,29 @@ public:
 	//HRESULT Release();
 };
 
+struct TextureSet
+{
+	std::string baseColor;
+	std::string normal;
+	std::string roughness;
+	std::string metallic;
+
+	std::vector<std::string> GetPathsArray() const
+	{
+		return{
+			baseColor.empty() ? "white.png" : baseColor,
+			normal.empty() ? "flat_normal.png" : normal,
+			roughness.empty() ? "white.png" : roughness,
+			metallic.empty() ? "black.png" : metallic
+		};
+	}
+};
+
 class Model {
 private:
 	//頂点バッファーの頂点レイアウトの参照に
-	struct Vertex {
+	struct Vertex
+	{
 		float Position[3];
 		float Normal[3];
 		float UV[2];
@@ -105,17 +126,36 @@ private:
 			return true;
 		}
 	};
+	struct VertexHash
+	{
+		std::size_t operator()(const Vertex& v)const//Vertex 構造体を渡すと、size_t（整数値）のハッシュ値を返す関数オブジェクト（Functor）を作る
+		{
+			std::size_t hash = 0;
+			const uint32_t* p = reinterpret_cast<const uint32_t*>(&v);//位置(x,y,z)や法線(nx,ny,nz)を個別に見るのではなく、メモリ上のバイト列として扱う
+			for (size_t i = 0; i < sizeof(Vertex) / sizeof(uint32_t); i++)
+			{
+				hash ^= std::hash<uint32_t>{}(p[i]) + 0x9e3779b9 + (hash << 6) + (hash >> 2);//さっきバイト列にしたやつにハッシュ値（ID）を与える
+			}
+			return hash;
+		}
+	};
+
 	Microsoft::WRL::ComPtr<ID3D12Resource> m_vertexBuffer = nullptr;
 	Microsoft::WRL::ComPtr<ID3D12Resource> m_indexBuffer = nullptr;
 	Microsoft::WRL::ComPtr<ID3D12Resource> m_constantBuffer = nullptr;//ワールドマトリックス
+	std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>> m_textureBuffer;//テクスチャリソース
+	std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>> m_uploadBuffer;//「GPUがコマンドリストのコピー処理を実行し終えるまで」は、アップロードバッファをメモリ上に維持する
 	D3D12_GPU_DESCRIPTOR_HANDLE m_cbvGpuHandle = {};
 	UINT allVertexCount = 0;
 	D3D12_VERTEX_BUFFER_VIEW m_vbView = {};
+	D3D12_INDEX_BUFFER_VIEW m_ibView = {};
 	struct MeshData
 	{
 	std::string materialName;
-	std::vector<Vertex> m_mVertexData;
+	std::vector<Vertex> m_mVertexData;//頂点データの配列重複あり
 	std::vector<UINT32> m_index;
+	UINT indexCount = 0;
+	UINT startIndex = 0;
 	};
 	std::vector<MeshData> m_meshes;//マテリアルごとに分離したメッシュデータの配列
 	DirectX::XMMATRIX worldMatrix = DirectX::XMMatrixIdentity();//ワールド行列
@@ -124,6 +164,7 @@ public:
 	void LoadMesh(fbxsdk::FbxMesh* mesh);
 	void CreateVertexBuffer(const RenderContext& context, std::vector<Vertex>& vertices);
 	void CreateIndexBuffer(const RenderContext& context, std::vector<UINT32> index);
+	void CreateTextureBuffer(const RenderContext& context, const TextureSet& textures);
 	bool Draw(const RenderContext& context);
 	void InitTransform(const RenderContext& context);
 	void UpdateTransform();
@@ -151,7 +192,7 @@ private:
 	DirectX::XMMATRIX viewMatrix = DirectX::XMMatrixIdentity();//カメラの位置は移動させるのでメンバ変数に設定
 	DirectX::XMMATRIX projectionMatrix = DirectX::XMMatrixIdentity();
 	DirectX::XMMATRIX matrix = DirectX::XMMatrixIdentity();
-	DirectX::XMFLOAT3 cameraPos = {0, 0, -3};
+	DirectX::XMFLOAT3 cameraPos = {0, 0, -1.5};
 	DirectX::XMFLOAT3 interestPoint = { 0, 0, 0 };
 	DirectX::XMFLOAT3 upVector = { 0, 1, 0 };
 	Microsoft::WRL::ComPtr<ID3D12Resource> c_constantBuffer = nullptr;

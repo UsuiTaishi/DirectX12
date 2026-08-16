@@ -156,9 +156,9 @@ void Material::GetDefaultGPSDesc(const shaderSet& shaders)
 	m_GPS_DESC.SampleMask = D3D12_DEFAULT_SAMPLE_MASK;
 	//ラスタライズ設定
 	D3D12_RASTERIZER_DESC rasterizerDesc = {};
-	rasterizerDesc.FillMode = D3D12_FILL_MODE_WIREFRAME;
+	rasterizerDesc.FillMode = D3D12_FILL_MODE_SOLID;
 	rasterizerDesc.CullMode = D3D12_CULL_MODE_BACK;
-	rasterizerDesc.FrontCounterClockwise = FALSE;//表面の決定方法。TRUEなら右ねじの法則
+	rasterizerDesc.FrontCounterClockwise = TRUE;//表面の決定方法。TRUEなら右ねじの法則
 	rasterizerDesc.DepthBias = 0;//Zファイティング対策、値が小さいほど優先して描画される(前面に描画される)
 	rasterizerDesc.DepthBiasClamp = 0.0;//深度バイアスでずらす最大値
 	rasterizerDesc.SlopeScaledDepthBias = 0.1;//光の向きに対してどれくらい斜めになっているか（スロープ）」に応じて、ズラす量を大きくするための倍率設定

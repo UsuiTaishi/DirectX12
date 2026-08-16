@@ -4,8 +4,6 @@
 #include <d3d12.h>
 #include <dxgi1_6.h>
 #include <vector>
-#include <d3dcompiler.h>
-//#include<DirectXTex.h>
 #include "renderer.h"
 
 #ifdef _DEBUG
@@ -39,7 +37,7 @@ int WINAPI	WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 	app.Init(hwnd, window_width, window_height);
 	RenderContext renderContext = app.CreateRenderContext();
 
-	erika.LoadModel(renderContext, "monkey.fbx");
+	erika.LoadModel(renderContext, "erika.fbx");
 	erika.InitTransform(renderContext);
 
 	shaderSet shaders = {};
@@ -65,8 +63,7 @@ int WINAPI	WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 		else
 		{
 			app.BeginFrame();
-			//‚±‚±‚É
-			// ‚©‚çƒ‚ƒfƒ‹‚ğ•`‚«‚±‚Şˆ—‚ğ
+			//‚±‚±‚©‚çƒ‚ƒfƒ‹‚ğ•`‚«‚±‚Şˆ—‚ğ
 			erika.UpdateTransform();
 			camera.SetCamera(renderContext, window_width, window_height);
 			material.SetPipelineState(renderContext);

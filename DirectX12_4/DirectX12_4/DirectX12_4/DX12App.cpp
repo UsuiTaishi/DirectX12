@@ -23,6 +23,14 @@
 using namespace std;
 using namespace DirectX;
 
+wstring ConvertWString(string& str)
+{
+	if (str.empty())return wstring();
+	int size_needed = MultiByteToWideChar(CP_ACP, 0, str.c_str(), -1, nullptr, 0);//MultiByteToWideCharは変換後の文字数を返すstr.c_str()はもじれるのポインタを返します。
+	wstring wstr(size_needed, 0);//メモリ確保
+	MultiByteToWideChar(CP_ACP, 0, str.c_str(), -1, &wstr[0], size_needed);
+	return wstr;
+}
 
 HRESULT DX12App::Init(HWND hWnd, int width, int height)
 //処理
@@ -250,11 +258,11 @@ HRESULT DX12App::Init(HWND hWnd, int width, int height)
 	rootparams[1].Descriptor.RegisterSpace = 0;
 	rootparams[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;//座標変換は頂点シェーダーで行う
 
-	//テクスチャ
+	//テクスチャ(複数枚使うルートシグネチャ)
 	D3D12_DESCRIPTOR_RANGE srvRange = {};
 	srvRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-	srvRange.NumDescriptors = 1;//使うテクスチャの数
-	srvRange.BaseShaderRegister = 0;//レジスターt0
+	srvRange.NumDescriptors = 4;//使うテクスチャの数
+	srvRange.BaseShaderRegister = 0;//レジスターt0～t3を使う（何番目のレジスターからスタートするかここで決まる）
 	srvRange.RegisterSpace = 0;
 	srvRange.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 	rootparams[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;

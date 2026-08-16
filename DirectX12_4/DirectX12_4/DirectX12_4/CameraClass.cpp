@@ -81,10 +81,10 @@ void Camera::SetCamera(const RenderContext& context, int width, int height)
 	//ビュー行列
 	viewMatrix = XMMatrixLookAtLH(XMLoadFloat3(&cameraPos), XMLoadFloat3(&interestPoint), XMLoadFloat3(&upVector));
 	//プロジェクション行列
-	float angleView = XM_PIDIV4;//垂直画角
+	float angleView = XM_PIDIV2;//垂直画角
 	float aspect = static_cast<float>(width) / static_cast<float>(height);//アスペクト比
 	float nearestClipping = 1.0f;//近いクリッピング面までの距離
-	float furthestClipping = 10.0f;//遠いクリッピング面までの距離
+	float furthestClipping = 15.0f;//遠いクリッピング面までの距離
 	projectionMatrix = XMMatrixPerspectiveFovLH(angleView, aspect, nearestClipping, furthestClipping);
 
 	matrix = viewMatrix * projectionMatrix;
